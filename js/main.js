@@ -81,6 +81,11 @@ function init() {
   $('#btn-hull').onclick = () => { if (expandHull()) { shipRelayout(); renderAll(); } };
   $('#btn-meta').onclick = openMetaHub;
 
+  // resource flow breakdown on hover
+  const resEl = $('#resources');
+  resEl.addEventListener('mouseover', e => { const el = e.target.closest('.res'); hoveredRes = el ? el.dataset.res : null; });
+  resEl.addEventListener('mouseleave', () => { hoveredRes = null; });
+
   // click backdrop to close modal
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
 

@@ -41,6 +41,76 @@ const RES_GROUPS = [
 ];
 
 let lastRates = { power: 0, oxygen: 0, co2: 0, water: 0, ice: 0, minerals: 0, food: 0, fuel: 0 };
+let hoveredRes = null;   // which resource meter the mouse is over (for the breakdown tooltip)
+
+/* ---------------- resource flow breakdown (for hover tooltip) ---------------- */
+// per-second sources (+) and sinks (-) for a resource, mirroring sim.js step().
+function resourceBreakdown(res) {
+  const R = GAME.resources, N = CONFIG.needs, RM = CONFIG.rooms;
+  const powered = hasPower(GAME);
+  const sources = [], sinks = [];
+  const add = (arr, label, rate) => { if (rate > 0.001) arr.push({ label, rate }); };
+  const headcount = aliveCrew().length;
+  const o2Slow = 1 - metaLevel('o2_reserve') * 0.05;
+  const mineMult = 1 + (GAME.sector - 1) * CONFIG.jump.mineralBonusPerSector;
+  const eaters = aliveCrew().filter(c => c.state === 'eating' && c.atStation).length;
+  const tag = (a, i) => a.length > 1 ? ' #' + (i + 1) : '';
+
+  if (res === 'power') {
+    roomsOfType('reactor').forEach((r, i, a) =>
+      add(sources, 'Reactor' + tag(a, i), (RM.reactor.powerPassive + RM.reactor.powerPerStaff * staffOn(r.id)) * attrMult(r, 'output') * reactorMultiplier()));
+    ['lifesupport', 'extractor', 'hydroponics', 'quarters', 'medbay'].forEach(t =>
+      roomsOfType(t).forEach((r, i, a) => add(sinks, ROOM_DEFS[t].name + tag(a, i), roomPowerDraw(r))));
+  } else if (res === 'oxygen') {
+    if (powered) roomsOfType('lifesupport').forEach((r, i, a) => {
+      if (staffOn(r.id) > 0) add(sources, 'Life Support' + tag(a, i), R.water > 0 ? RM.lifesupport.o2Out * attrMult(r, 'output') : 0);
+    });
+    add(sinks, `Crew breathing ×${headcount}`, headcount * N.o2PerCrew * o2Slow);
+    if (powered) roomsOfType('hydroponics').forEach(r => { if (staffOn(r.id) > 0) add(sinks, 'Hydroponics', RM.hydroponics.o2Cost * attrMult(r, 'output') * staffOn(r.id)); });
+    const breach = activeEvent('hull_breach'); if (breach) add(sinks, 'Hull breach', breach.o2Drain);
+  } else if (res === 'co2') {
+    add(sources, `Crew exhaling ×${headcount}`, headcount * N.co2PerCrew);
+    if (powered) roomsOfType('extractor').forEach(r => { if (staffOn(r.id) > 0) add(sources, 'Mining (drilling)', RM.extractor.co2Out * attrMult(r, 'output')); });
+    GAME.events.forEach(ev => { if (ev.co2Out) add(sources, ev.name || 'Hazard', ev.co2Out); });
+    if (powered) roomsOfType('lifesupport').forEach(r => { if (staffOn(r.id) > 0) add(sinks, 'Life Support (scrub)', RM.lifesupport.co2Scrub * attrMult(r, 'co2scrub')); });
+  } else if (res === 'water') {
+    if (powered) roomsOfType('lifesupport').forEach(r => {
+      if (staffOn(r.id) <= 0) return;
+      add(sources, 'Life Support (melt ice)', RM.lifesupport.iceMelt * attrMult(r, 'water'));
+      add(sinks, 'Life Support (make O₂)', R.water > 0 ? RM.lifesupport.waterCost * attrMult(r, 'output') : 0);
+    });
+    if (powered) roomsOfType('hydroponics').forEach(r => { if (staffOn(r.id) > 0) add(sinks, 'Hydroponics', RM.hydroponics.waterCost * attrMult(r, 'output') * staffOn(r.id)); });
+  } else if (res === 'ice') {
+    if (powered) roomsOfType('extractor').forEach(r => { if (staffOn(r.id) > 0) add(sources, 'Mining Drone', RM.extractor.iceOut * attrMult(r, 'output') * staffOn(r.id) * mineMult); });
+    if (powered) roomsOfType('lifesupport').forEach(r => { if (staffOn(r.id) > 0) add(sinks, 'Life Support (melt)', RM.lifesupport.iceMelt * attrMult(r, 'water')); });
+  } else if (res === 'minerals') {
+    if (powered) roomsOfType('extractor').forEach(r => { if (staffOn(r.id) > 0) add(sources, 'Mining Drone', RM.extractor.mineralsOut * attrMult(r, 'output') * staffOn(r.id) * mineMult); });
+  } else if (res === 'food') {
+    if (powered) roomsOfType('hydroponics').forEach(r => {
+      if (staffOn(r.id) > 0) add(sources, 'Hydroponics', (R.water > 0 && R.oxygen > 0) ? RM.hydroponics.foodOut * attrMult(r, 'output') * staffOn(r.id) : 0);
+    });
+    if (eaters) add(sinks, `Crew eating ×${eaters}`, eaters * N.foodPerEat);
+  }
+  const net = sources.reduce((s, x) => s + x.rate, 0) - sinks.reduce((s, x) => s + x.rate, 0);
+  return { sources, sinks, net };
+}
+
+function renderResTip() {
+  const tip = $('#res-tip');
+  if (!tip) return;
+  const meter = hoveredRes && document.querySelector(`#resources .res[data-res="${hoveredRes}"]`);
+  if (!hoveredRes || !meter || !GAME) { tip.classList.add('hidden'); return; }
+  const bd = resourceBreakdown(hoveredRes), m = RES_META[hoveredRes];
+  const fr = r => (r > 0 ? '+' : '−') + Math.abs(r).toFixed(2) + '/s';
+  const row = (s, cls) => `<div class="rt-row"><span>${s.label}</span><span class="${cls}">${fr(cls === 'down' ? -s.rate : s.rate)}</span></div>`;
+  const body = bd.sources.map(s => row(s, 'up')).concat(bd.sinks.map(s => row(s, 'down'))).join('');
+  tip.innerHTML = `<div class="rt-title">${m.label} flow</div>${body || '<div class="rt-empty">No continuous flow — manual only (synth / jump / salvage / build).</div>'}` +
+    (body ? `<div class="rt-net"><span>Net</span><span class="${bd.net > 0.01 ? 'up' : bd.net < -0.01 ? 'down' : ''}">${fr(bd.net)}</span></div>` : '');
+  const r = meter.getBoundingClientRect();
+  tip.style.left = Math.min(r.left, window.innerWidth - 220) + 'px';
+  tip.style.top = (r.bottom + 6) + 'px';
+  tip.classList.remove('hidden');
+}
 
 /* ---------------- top bar ---------------- */
 function resMeter(res) {
@@ -51,7 +121,7 @@ function resMeter(res) {
   const rcls = rate > 0.05 ? 'up' : rate < -0.05 ? 'down' : '';
   // CO₂ is a hazard meter: full = bad, so flip the rate colours and warn near the top
   const danger = m.hazard && pct >= CONFIG.needs.co2Danger * 100;
-  return `<div class="res ${m.cls} ${danger ? 'danger' : ''}">
+  return `<div class="res ${m.cls} ${danger ? 'danger' : ''}" data-res="${res}">
     <div class="res-top"><span>${m.label}</span><span class="res-val">${fmt(val)}<span class="muted">/${fmt(max)}</span></span></div>
     <div class="bar"><i style="width:${pct}%"></i></div>
     <div class="rate ${m.hazard ? (rate > 0.05 ? 'down' : rate < -0.05 ? 'up' : '') : rcls}">${fmtRate(rate)}</div>
@@ -65,6 +135,7 @@ function renderTop() {
     `<div class="res-group"><div class="res-group-label">${g.name}</div>
       <div class="res-row">${g.keys.map(resMeter).join('')}</div></div>`
   ).join('');
+  renderResTip();
 }
 
 /* ---------------- ship grid ---------------- */

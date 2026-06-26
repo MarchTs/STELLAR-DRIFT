@@ -68,8 +68,23 @@ body {
 .res.food .bar > i { background: var(--food); }
 .res.fuel .bar > i { background: var(--fuel); }
 .res.danger { border-color: var(--bad); box-shadow: 0 0 8px rgba(255,107,107,.4); }
+.res { cursor: help; }
 .res .rate { font-size: 10px; min-height: 12px; }
 .rate.up { color: var(--good); } .rate.down { color: var(--bad); }
+
+/* resource flow breakdown tooltip */
+.res-tip {
+  position: fixed; z-index: 60; min-width: 190px; max-width: 230px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; box-shadow: var(--shadow); font-size: 11px; pointer-events: none;
+}
+.res-tip.hidden { display: none; }
+.res-tip .rt-title { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+.res-tip .rt-row { display: flex; justify-content: space-between; gap: 12px; padding: 1px 0; }
+.res-tip .rt-row .up { color: var(--good); } .res-tip .rt-row .down { color: var(--bad); }
+.res-tip .up { color: var(--good); } .res-tip .down { color: var(--bad); }
+.res-tip .rt-net { display: flex; justify-content: space-between; gap: 12px; margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); font-weight: 700; }
+.res-tip .rt-empty { color: var(--muted); }
 
 .top-actions { display: flex; align-items: center; gap: 10px; }
 .cores { display: flex; align-items: center; gap: 5px; font-weight: 700; color: var(--core); font-size: 15px; }
