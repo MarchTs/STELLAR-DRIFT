@@ -97,6 +97,9 @@ const CONFIG = {
     eventRateScale: 0.10,    // events get ~10% more frequent per sector
   },
 
+  // ---- Hull expansion: each tier adds a bay column (+2 bays) ----
+  hull: { maxTier: 4, cost: (tier) => 120 + (tier - 1) * 120 },   // cost to expand FROM the given tier
+
   // ---- Manual fuel synthesis (click): very inefficient water -> fuel ----
   synth: { waterPerFuel: 10, fuelPerClick: 1 },
 

@@ -78,6 +78,7 @@ function init() {
 
   $('#btn-jump').onclick = () => { if (doJump()) { triggerJumpFlash(); renderAll(); } };
   $('#btn-synth').onclick = () => { if (synthFuel()) renderAll(); };
+  $('#btn-hull').onclick = () => { if (expandHull()) { shipRelayout(); renderAll(); } };
   $('#btn-meta').onclick = openMetaHub;
 
   // click backdrop to close modal

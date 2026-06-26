@@ -32,6 +32,7 @@ function newRun() {
     roomsBuilt: 0,
     gameOver: false,
     paused: false,
+    hullTier: 1,
     stock: rollSectorStock(1),
   };
   GAME.resources.minerals += metaLevel('start_minerals') * 25;

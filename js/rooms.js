@@ -8,12 +8,28 @@ function makeRoom(type, bay) {
 /* ----------------------------------------------------------
    Build / upgrade rooms
    ---------------------------------------------------------- */
-const MAX_ROOMS = 8;   // the ship has 8 bays (see js/ship.js)
 const BUILDABLE = ['extractor', 'hydroponics', 'quarters', 'medbay', 'messhall', 'lifesupport', 'reactor', 'engine'];
 const SINGLE_INSTANCE = { medbay: 1, engine: 1, messhall: 1 };   // at most one of these
-function shipFull() { return GAME.rooms.length >= MAX_ROOMS; }
+// bay count grows with the hull tier (tier 1 = 8 bays, +2 per tier). See js/ship.js.
+function hullTier() { return (GAME && GAME.hullTier) || 1; }
+function maxRooms() { return (4 + (hullTier() - 1)) * 2; }
+function shipFull() { return GAME.rooms.length >= maxRooms(); }
 function bayOccupied(bay) { return GAME.rooms.some(r => r.bay === bay); }
-function firstEmptyBay() { for (let i = 0; i < MAX_ROOMS; i++) if (!bayOccupied(i)) return i; return -1; }
+function firstEmptyBay() { for (let i = 0; i < maxRooms(); i++) if (!bayOccupied(i)) return i; return -1; }
+
+/* ---- hull expansion: upgrade the ship to add more bays ---- */
+function hullCost() { return Math.round(CONFIG.hull.cost(hullTier())); }
+function canExpandHull() {
+  return GAME && !GAME.gameOver && hullTier() < CONFIG.hull.maxTier && GAME.resources.minerals >= hullCost();
+}
+function expandHull() {
+  if (!canExpandHull()) return false;
+  GAME.resources.minerals -= hullCost();
+  GAME.hullTier = hullTier() + 1;
+  logMsg(`Hull expanded — the ship now has ${maxRooms()} bays.`, 'good');
+  saveGame();
+  return true;
+}
 function buildableTypes() {
   return BUILDABLE.filter(t => !(SINGLE_INSTANCE[t] && roomsOfType(t).length >= SINGLE_INSTANCE[t]));
 }

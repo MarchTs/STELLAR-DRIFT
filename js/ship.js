@@ -5,21 +5,26 @@
    spatial crew movement (ephemeral, not saved).
    ============================================================ */
 
-const TILE = 26, COLS = 21, ROWS = 12;
-const WIDTH = COLS * TILE, HEIGHT = ROWS * TILE;
-
-// 4 bays across × 2 rows of bays = 8 room slots
-const BAY_X = [[1, 4], [6, 9], [11, 14], [16, 19]];
+const TILE = 26, ROWS = 12;
 const BAY_TOP_Y = 1, BAY_BOT_Y = 8;       // top bays rows 1-3, bottom rows 8-10
-const DIV_COLS = [5, 10, 15];             // vertical walls between bays
 const WALL_ROWS = [4, 7];                 // walls separating bays from the corridor
 
+// Hull tier sets the number of bay COLUMNS (tier 1 = 4 cols = 8 bays, +1 col per tier).
+// Dimensions recompute from it, so upgrading the hull widens the ship.
+let HULL_COLS = 4, COLS = 21, WIDTH = COLS * TILE;
+const HEIGHT = ROWS * TILE;
+function syncHull() {
+  HULL_COLS = 4 + (((GAME && GAME.hullTier) || 1) - 1);
+  COLS = HULL_COLS * 5 + 1;               // each bay column = 4 wide + 1 divider, + left border
+  WIDTH = COLS * TILE;
+}
+function bayCount() { return HULL_COLS * 2; }
+
 function bayRect(i) {
-  const col = i % 4, isTop = i < 4;
-  const [x0, x1] = BAY_X[col];
+  const col = i % HULL_COLS, isTop = i < HULL_COLS;
+  const x0 = 1 + col * 5, x1 = x0 + 3;
   const y0 = isTop ? BAY_TOP_Y : BAY_BOT_Y;
-  const y1 = y0 + 2;                       // 3 tiles tall
-  const cy = isTop ? y0 + 1 : y0 + 1;      // center row of bay
+  const y1 = y0 + 2, cy = y0 + 1;          // 3 tiles tall
   return {
     i, x0, y0, x1, y1, isTop, cy,
     station: { x: x0 + 1, y: cy },
@@ -49,26 +54,31 @@ function standTiles(b) {
   return out.length ? out : [b.station];
 }
 
-/* ---------------- static layout grids ---------------- */
-let WALK = null, WALL = null, DOORS = [];
+/* ---------------- static layout grids (rebuilt when hull tier changes) ---------------- */
+let WALK = null, WALL = null, DOORS = [], _layoutCols = 0;
 function ensureLayout() {
-  if (WALK) return;
+  syncHull();
+  if (WALK && _layoutCols === COLS) return;
+  _layoutCols = COLS;
   WALL = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
   WALK = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
   for (let y = 1; y < ROWS - 1; y++) for (let x = 1; x < COLS - 1; x++) WALK[y][x] = true;
   // hull border
   for (let x = 0; x < COLS; x++) { WALL[0][x] = WALL[ROWS - 1][x] = true; }
   for (let y = 0; y < ROWS; y++) { WALL[y][0] = WALL[y][COLS - 1] = true; }
-  // vertical bay dividers (not across the corridor rows 5-6)
-  DIV_COLS.forEach(x => [1, 2, 3, 8, 9, 10].forEach(y => { WALL[y][x] = true; }));
+  // vertical bay dividers between columns (not across the corridor rows 5-6)
+  for (let c = 1; c < HULL_COLS; c++) { const x = c * 5; [1, 2, 3, 8, 9, 10].forEach(y => { WALL[y][x] = true; }); }
   // corridor boundary walls
   WALL_ROWS.forEach(y => { for (let x = 1; x < COLS - 1; x++) WALL[y][x] = true; });
   // carve a door per bay
-  for (let i = 0; i < 8; i++) { const d = bayRect(i).door; WALL[d.y][d.x] = false; DOORS.push(d); }
+  DOORS = [];
+  for (let i = 0; i < bayCount(); i++) { const d = bayRect(i).door; WALL[d.y][d.x] = false; DOORS.push(d); }
   // walls block walking
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (WALL[y][x]) WALK[y][x] = false;
   for (const d of DOORS) WALK[d.y][d.x] = true;
 }
+// rebuild layout + resize the canvas after a hull upgrade
+function shipRelayout() { WALK = null; setupCanvas(); drawShip(); }
 
 function tileCenter(tx, ty) { return { x: (tx + 0.5) * TILE, y: (ty + 0.5) * TILE }; }
 
@@ -240,16 +250,15 @@ function triggerJumpFlash() { jumpFlash = 0.9; }   // seconds of warp flash
 
 /* ---------------- drawing ---------------- */
 function setupCanvas() {
+  ensureLayout();                          // sync dimensions to the current hull tier
   const cv = document.querySelector('#ship-canvas');
   if (!cv) return;
   const dpr = window.devicePixelRatio || 1;
   cv.width = WIDTH * dpr; cv.height = HEIGHT * dpr;
   cv.style.width = WIDTH + 'px'; cv.style.height = HEIGHT + 'px';
   cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (!STARS) {
-    STARS = [];
-    for (let i = 0; i < 60; i++) STARS.push({ x: Math.random() * WIDTH, y: Math.random() * HEIGHT, r: Math.random() * 1.2 + 0.2, a: Math.random() * 0.5 + 0.2 });
-  }
+  STARS = [];                              // (re)scatter stars to fill the current width
+  for (let i = 0; i < 60; i++) STARS.push({ x: Math.random() * WIDTH, y: Math.random() * HEIGHT, r: Math.random() * 1.2 + 0.2, a: Math.random() * 0.5 + 0.2 });
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -286,7 +295,7 @@ function drawShip() {
 
   // room floors
   GAME.rooms.forEach(r => {
-    if (r.bay >= 8) return;
+    if (r.bay >= bayCount()) return;
     const b = bayRect(r.bay), col = ROOM_FLOOR[r.type] || '#1a2233';
     for (let y = b.y0; y <= b.y1; y++) for (let x = b.x0; x <= b.x1; x++) if (WALK[y][x]) tileFill(ctx, x, y, col);
   });
@@ -309,7 +318,7 @@ function drawShip() {
   });
 
   // empty bays: a dashed "build here" slot
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < bayCount(); i++) {
     if (roomInBay(i)) continue;
     const b = bayRect(i);
     ctx.save();
@@ -324,7 +333,7 @@ function drawShip() {
   }
 
   // hover highlight (occupied or empty bay)
-  if (hoverBay >= 0 && hoverBay < 8) {
+  if (hoverBay >= 0 && hoverBay < bayCount()) {
     const b = bayRect(hoverBay);
     ctx.strokeStyle = 'rgba(92,200,255,.7)'; ctx.lineWidth = 2;
     ctx.strokeRect(b.x0 * TILE + 1, b.y0 * TILE + 1, (b.x1 - b.x0 + 1) * TILE - 2, (b.y1 - b.y0 + 1) * TILE - 2);
@@ -332,7 +341,7 @@ function drawShip() {
 
   // stations, beds & labels
   GAME.rooms.forEach(r => {
-    if (r.bay >= 8) return;
+    if (r.bay >= bayCount()) return;
     const b = bayRect(r.bay), def = ROOM_DEFS[r.type], ac = ROOM_ACCENT[r.type] || '#5cc8ff';
 
     // furniture: beds (quarters/medbay) or seats (mess hall), scaling with the attribute
@@ -426,7 +435,7 @@ function drawPawn(ctx, p) {
 
 /* ---------------- interaction ---------------- */
 function bayAtTile(tx, ty) {
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < bayCount(); i++) {
     const b = bayRect(i);
     if (tx >= b.x0 && tx <= b.x1 && ty >= b.y0 && ty <= b.y1) return i;
   }

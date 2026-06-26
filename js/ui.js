@@ -88,7 +88,7 @@ function renderShip() {
   const tray = $('#build-tray');
   if (!tray) return;
   tray.innerHTML = shipFull()
-    ? `<div class="tray-msg">All ${MAX_ROOMS} bays occupied — demolish a module to free a slot.</div>`
+    ? `<div class="tray-msg">All ${maxRooms()} bays occupied — expand the hull or demolish a module.</div>`
     : `<div class="tray-msg">▦ Click an empty bay on the ship to build a module.</div>`;
 }
 
@@ -171,6 +171,13 @@ function renderControls() {
     synth.disabled = !canSynthFuel();
     synth.textContent = `Synth Fuel (${CONFIG.synth.waterPerFuel} water → ${CONFIG.synth.fuelPerClick})`;
     synth.title = 'Convert water into fuel — inefficient, but reliable';
+  }
+  const hull = $('#btn-hull');
+  if (hull) {
+    const maxed = hullTier() >= CONFIG.hull.maxTier;
+    hull.disabled = !canExpandHull();
+    hull.textContent = maxed ? 'Hull Maxed' : `Expand Hull (${hullCost()} min → +2 bays)`;
+    hull.title = `Widen the ship for more module bays (currently ${maxRooms()})`;
   }
   const si = $('#sector-info');
   if (si && GAME.stock) {
