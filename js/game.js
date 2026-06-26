@@ -622,6 +622,19 @@ function jumpFuelCost() {
   const eff = eng ? A_EFF(attrLvl(eng, 'fuelefficiency')) : 1;
   return Math.round(CONFIG.jump.fuelCost * eff);
 }
+// manual fuel synthesis: click to convert water -> fuel (very inefficient)
+function canSynthFuel() {
+  return GAME && !GAME.gameOver &&
+    GAME.resources.water >= CONFIG.synth.waterPerFuel &&
+    GAME.resources.fuel < cap(GAME, 'fuel');
+}
+function synthFuel() {
+  if (!canSynthFuel()) return false;
+  GAME.resources.water -= CONFIG.synth.waterPerFuel;
+  GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + CONFIG.synth.fuelPerClick);
+  return true;
+}
+
 function canJump() { return GAME && !GAME.gameOver && GAME.resources.fuel >= jumpFuelCost(); }
 function doJump() {
   if (!canJump()) return false;

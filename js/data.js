@@ -95,6 +95,9 @@ const CONFIG = {
     eventRateScale: 0.10,    // events get ~10% more frequent per sector
   },
 
+  // ---- Manual fuel synthesis (click): very inefficient water -> fuel ----
+  synth: { waterPerFuel: 10, fuelPerClick: 1 },
+
   // ---- Per-sector finite resource stock (rolled on entering a sector) ----
   sectorStock: {
     mineralsMin: 160, mineralsMax: 320,

@@ -173,6 +173,12 @@ function renderLog() {
 function renderControls() {
   $('#btn-jump').disabled = !canJump();
   $('#btn-jump').textContent = `Jump ⟶ (${jumpFuelCost()} fuel)`;
+  const synth = $('#btn-synth');
+  if (synth) {
+    synth.disabled = !canSynthFuel();
+    synth.textContent = `Synth Fuel (${CONFIG.synth.waterPerFuel} water → ${CONFIG.synth.fuelPerClick})`;
+    synth.title = 'Convert water into fuel — inefficient, but reliable';
+  }
   const si = $('#sector-info');
   if (si && GAME.stock) {
     const low = GAME.stock.minerals < 30 && GAME.stock.ice < 30;

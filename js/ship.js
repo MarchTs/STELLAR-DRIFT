@@ -114,6 +114,7 @@ function bayOfType(type) {
 
 function updateShip(dt) {
   if (!GAME) return;
+  if (jumpFlash > 0) jumpFlash = Math.max(0, jumpFlash - dt);
   ensureLayout();
   const alive = GAME.crew.filter(c => c.state !== 'dead');
 
@@ -230,7 +231,8 @@ const ROOM_ACCENT = {
 };
 const STATE_BADGE = { sleeping: 'z', eating: '◦', healing: '✚', repairing: '🔧' };
 
-let STARS = null, hoverBay = -1;
+let STARS = null, hoverBay = -1, jumpFlash = 0;
+function triggerJumpFlash() { jumpFlash = 0.9; }   // seconds of warp flash
 
 /* ---------------- drawing ---------------- */
 function setupCanvas() {
@@ -266,7 +268,13 @@ function drawShip() {
 
   // space backdrop
   ctx.fillStyle = '#05080f'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  STARS && STARS.forEach(s => { ctx.globalAlpha = s.a; ctx.fillStyle = '#9fb4d8'; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill(); });
+  STARS && STARS.forEach(s => {
+    ctx.globalAlpha = s.a; ctx.fillStyle = '#9fb4d8';
+    if (jumpFlash > 0) {                                  // warp: stars streak horizontally
+      const len = jumpFlash * 90 * (s.r + 0.4);
+      ctx.fillRect(s.x - len, s.y - s.r * 0.5, len, Math.max(1, s.r));
+    } else { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill(); }
+  });
   ctx.globalAlpha = 1;
 
   // base interior floor (corridor)
@@ -350,6 +358,15 @@ function drawShip() {
 
   // pawns
   Object.values(PAWNS).forEach(p => drawPawn(ctx, p));
+
+  // jump flash — a bright bluish-white wash that fades out
+  if (jumpFlash > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.85, jumpFlash);
+    ctx.fillStyle = '#dff0ff';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.restore();
+  }
 }
 
 function drawHazard(ctx, ev) {
