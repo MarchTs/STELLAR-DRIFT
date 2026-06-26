@@ -21,7 +21,9 @@ function syncHull() {
 function bayCount() { return HULL_COLS * 2; }
 
 function bayRect(i) {
-  const col = i % HULL_COLS, isTop = i < HULL_COLS;
+  // column-major: bay = col*2 + (bottom?1:0). Stable when columns are added,
+  // so existing rooms keep their physical spot when the hull is expanded.
+  const col = Math.floor(i / 2), isTop = (i % 2) === 0;
   const x0 = 1 + col * 5, x1 = x0 + 3;
   const y0 = isTop ? BAY_TOP_Y : BAY_BOT_Y;
   const y1 = y0 + 2, cy = y0 + 1;          // 3 tiles tall

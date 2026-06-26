@@ -12,11 +12,13 @@ function newRun() {
   const used = new Set();
   crew.forEach(c => { let n = 0; while (used.has(c.name) && n++ < 50) c.name = pick(CREW_NAMES); used.add(c.name); });
 
+  // bays are column-major (even = top, odd = bottom). Production across the top row,
+  // crew rooms on the bottom.
   const rooms = [
-    makeRoom('reactor', 0), makeRoom('lifesupport', 1), makeRoom('extractor', 2),
-    makeRoom('hydroponics', 3), makeRoom('quarters', 4),
+    makeRoom('reactor', 0), makeRoom('lifesupport', 2), makeRoom('extractor', 4),
+    makeRoom('hydroponics', 6), makeRoom('quarters', 1),
   ];
-  if (metaLevel('prebuilt_medbay')) rooms.push(makeRoom('medbay', 5));
+  if (metaLevel('prebuilt_medbay')) rooms.push(makeRoom('medbay', 3));
 
   GAME = {
     sector: 1,

@@ -25,7 +25,7 @@ const CONFIG = {
     o2PerCrew: 0.32,          // ship oxygen consumed per crew per second
     co2PerCrew: 0.26,         // co2 exhaled per crew per second
     // regen while performing the matching task
-    energyRegen: 3.2,         // sleeping
+    energyRegen: 4.6,         // sleeping (kept brisk so crew don't look stuck in bed)
     eatRegen: 11,             // hunger refill while eating
     foodPerEat: 2.2,          // food resource consumed per second while eating
     healRegen: 4.0,           // health refill in medbay
