@@ -99,13 +99,17 @@ function jobNeed(c, r) {
 }
 
 // Role-less, demand-driven: a crew operates whichever module most needs a body.
-// Dividing by crew already assigned spreads them out; null = nothing to do -> idle.
+// Dividing by OTHER crew assigned spreads them out (excluding self so the current
+// job isn't self-penalised); a continuity bonus keeps a crew put to avoid thrashing.
 function pickWorkRoom(c) {
   let best = null, bestScore = 0;
   GAME.rooms.forEach(r => {
     const need = jobNeed(c, r);
     if (need <= 0) return;
-    const score = need / (assignedOn(r.id) + 1);
+    const here = c.roomId === r.id;
+    const others = assignedOn(r.id) - (here ? 1 : 0);
+    let score = need / (others + 1);
+    if (here) score *= 1.6;                  // stickiness: don't abandon a job that still needs work
     if (score > bestScore) { bestScore = score; best = r; }
   });
   return best;
