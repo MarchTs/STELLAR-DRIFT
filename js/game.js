@@ -86,12 +86,19 @@ function buyUpgrade(id) {
 /* ----------------------------------------------------------
    Resource caps (depend on room levels + meta)
    ---------------------------------------------------------- */
-const RES_SOURCE = { power: 'reactor', oxygen: 'lifesupport', minerals: 'extractor', food: 'hydroponics' };
+// each resource's cap scales with a storage-type attribute on a particular room
+const RES_CAP_SRC = {
+  power:    { type: 'reactor',     attr: 'storage' },
+  oxygen:   { type: 'lifesupport', attr: 'storage' },
+  co2:      { type: 'lifesupport', attr: 'co2storage' },
+  water:    { type: 'lifesupport', attr: 'waterstorage' },
+  minerals: { type: 'extractor',   attr: 'storage' },
+  food:     { type: 'hydroponics', attr: 'storage' },
+};
 function cap(st, res) {
   let c = CONFIG.baseCaps[res];
-  // each resource's cap scales with the Storage attribute of its source room
-  const src = st.rooms.find(r => r.type === RES_SOURCE[res]);
-  if (src && attrDef(src.type, 'storage')) c *= A_MULT(attrLvl(src, 'storage'));
+  const m = RES_CAP_SRC[res];
+  if (m) { const r = st.rooms.find(x => x.type === m.type); if (r && attrDef(r.type, m.attr)) c *= A_MULT(attrLvl(r, m.attr)); }
   if (res === 'oxygen') c += metaLevel('o2_reserve') * 25;   // meta reserve stacks additively
   return Math.round(c);
 }
@@ -321,7 +328,7 @@ function pickWorkRoom(c) {
   // LIFE-OR-DEATH: if air is failing and nobody is on Life Support, ANY crew covers it
   // (so a sleeping/dead/busy engineer can't doom the ship).
   const lsRooms = roomsOfType('lifesupport');
-  if (lsRooms[0] && staffOn(lsRooms[0].id) <= 0) {
+  if (lsRooms[0] && assignedOn(lsRooms[0].id) <= 0) {
     const o2F = GAME.resources.oxygen / cap(GAME, 'oxygen');
     const co2F = GAME.resources.co2 / cap(GAME, 'co2');
     if ((o2F < 0.5 || co2F >= 0.6) && hasPower(GAME)) return leastStaffed(lsRooms);
@@ -342,9 +349,15 @@ function pickWorkRoom(c) {
     if (powerDemand && reactor.length) return leastStaffed(reactor);
     return null;                                                 // everything's fine -> idle
   }
-  // miners / botanists: operate their module unless its output is full (locked)
+  // miners / botanists: operate their module while its output isn't full.
+  // Hysteresis: start when the store dips below 92%, keep going until it's full.
   let rooms = [];
-  ROLES[c.role].staffs.forEach(t => roomsOfType(t).forEach(r => { if (!roomLocked(r)) rooms.push(r); }));
+  ROLES[c.role].staffs.forEach(t => roomsOfType(t).forEach(r => {
+    const res = ROOM_OUTPUT[r.type];
+    const frac = res ? GAME.resources[res] / cap(GAME, res) : 0;
+    const here = c.roomId === r.id;
+    if (here ? frac < 0.999 : frac < 0.92) rooms.push(r);
+  }));
   return rooms.length ? leastStaffed(rooms) : null;
 }
 
@@ -420,6 +433,7 @@ function step(dt) {
       const dIce = Math.min(EX.iceOut * m, GAME.stock.ice);
       GAME.stock.minerals -= dMin; R.minerals += dMin;
       GAME.stock.ice -= dIce; R.ice += dIce;
+      R.co2 += EX.co2Out * attrMult(r, 'output') * dt;   // drilling vents CO₂; more with Yield
     });
     roomsOfType('hydroponics').forEach(r => {
       const staff = staffOn(r.id);
@@ -454,13 +468,13 @@ function step(dt) {
     if (c.state !== 'sleeping') n.energy -= (c.state === 'working' ? N.energyDrainWork : N.energyDrainIdle) * dt;
     n.hunger -= N.hungerDrain * dt;
 
-    // task regen
-    if (c.state === 'sleeping') n.energy += N.energyRegen * qMult * dt;
-    if (c.state === 'eating') {
+    // task regen — only once the crew has physically reached the bed / galley / medbay
+    if (c.state === 'sleeping' && c.atStation) n.energy += N.energyRegen * qMult * dt;
+    if (c.state === 'eating' && c.atStation) {
       n.hunger += N.eatRegen * dt;
       GAME.resources.food -= N.foodPerEat * dt;
     }
-    if (c.state === 'healing') n.health += N.healRegen * mMult * dt;
+    if (c.state === 'healing' && c.atStation) n.health += N.healRegen * mMult * dt;
 
     // illness event
     const ill = GAME.events.find(e => e.id === 'illness' && e.target === c.id);
@@ -479,7 +493,7 @@ function step(dt) {
     const needsOk = n.hunger > 40 && n.energy > 40 && !o2Low;
     n.morale += (needsOk ? N.moraleRecover : -N.moraleDecay) * dt;
     // eating at the Hydroponics bay (no proper Mess Hall) is grim — it costs morale
-    if (c.state === 'eating' && !hasMessHall) n.morale -= N.eatNoMessMorale * dt;
+    if (c.state === 'eating' && c.atStation && !hasMessHall) n.morale -= N.eatNoMessMorale * dt;
 
     // clamp
     n.hunger = clamp(n.hunger, 0, 100);
@@ -509,15 +523,20 @@ function step(dt) {
 }
 
 // morale affects work output a touch — fold into staffOn
+// effective operators ON a module — only crew physically present produce/consume
 function staffOn(roomId) {
   let s = 0;
   aliveCrew().forEach(c => {
-    if (c.state === 'working' && c.roomId === roomId) {
+    if (c.state === 'working' && c.roomId === roomId && c.atStation) {
       const moraleMult = 0.6 + c.needs.morale / 250; // 0.6 .. 1.0
       s += skillMult(c) * moraleMult;
     }
   });
   return s;
+}
+// crew ASSIGNED to a module (heading there or on it) — used for AI coverage decisions
+function assignedOn(roomId) {
+  return aliveCrew().filter(c => c.state === 'working' && c.roomId === roomId).length;
 }
 
 function handleDeath(c) {

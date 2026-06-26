@@ -56,8 +56,8 @@ const CONFIG = {
     reactor:    { powerPassive: 5.0, powerPerStaff: 3.2 },
     // Life Support: melts ice->water, turns water+power->oxygen, scrubs co2
     lifesupport:{ powerCost: 2.0, o2Out: 4.2, waterCost: 0.35, iceMelt: 0.6, co2Scrub: 2.5 },
-    // Mining Drone: mines minerals AND ice from the sector's finite stock
-    extractor:  { powerCost: 2.0, mineralsOut: 1.6, iceOut: 0.8 },
+    // Mining Drone: mines minerals AND ice from the sector's finite stock; drilling vents CO₂
+    extractor:  { powerCost: 2.0, mineralsOut: 1.6, iceOut: 0.8, co2Out: 0.45 },
     // Hydroponics: consumes water + oxygen, produces food
     hydroponics:{ powerCost: 2.0, foodOut: 2.2, waterCost: 0.4, o2Cost: 0.3 },
     quarters:   { powerCost: 0.3, beds: 2 },
@@ -130,7 +130,7 @@ const ROLES = {
 const ROOM_DEFS = {
   reactor:     { name: 'Reactor',     icon: '⚛', staffRole: 'engineer', auto: true,  desc: 'Generates power. An on-duty engineer boosts output.' },
   lifesupport: { name: 'Life Support',icon: '☁', staffRole: 'engineer', auto: true,  desc: 'An engineer operates it to make oxygen from water and scrub CO₂. Idle when nobody is aboard it.' },
-  extractor:   { name: 'Mining Drone', icon: '⛏', staffRole: 'miner',    auto: false, desc: 'Mines minerals and ice from the sector when operated by a miner. Needs power.' },
+  extractor:   { name: 'Mining Drone', icon: '⛏', staffRole: 'miner',    auto: false, desc: 'Mines minerals and ice from the sector when operated by a miner. Drilling vents CO₂ — more when upgraded. Needs power.' },
   hydroponics: { name: 'Hydroponics', icon: '❀', staffRole: 'botanist', auto: false, desc: 'Grows food from water + oxygen when staffed by a botanist. Needs power.' },
   quarters:    { name: 'Quarters',    icon: '⏾', staffRole: null,       auto: true,  desc: 'Beds where tired crew sleep to restore energy.' },
   medbay:      { name: 'Medbay',      icon: '✚', staffRole: null,       auto: true,  desc: 'Injured or sick crew heal here. Needs power.' },
@@ -165,15 +165,19 @@ const ROOM_ATTRS = {
       hint: (l) => `battery capacity ${_r(CONFIG.baseCaps.power * A_MULT(l))}` },
   ],
   lifesupport: [
-    { key: 'output',     name: 'O₂ Output',  kind: 'mult', base: 28, max: 10,
+    { key: 'output',       name: 'O₂ Output',  kind: 'mult', base: 28, max: 10,
       hint: (l) => `+${_f(CONFIG.rooms.lifesupport.o2Out * A_MULT(l))}/s oxygen` },
-    { key: 'co2scrub',   name: 'CO₂ Scrubber', kind: 'mult', base: 24, max: 10,
-      hint: (l) => `scrubs ${_f(CONFIG.rooms.lifesupport.co2Scrub * A_MULT(l))}/s CO₂` },
-    { key: 'water',      name: 'Water Reclaimer', kind: 'mult', base: 22, max: 10,
-      hint: (l) => `melts ${_f(CONFIG.rooms.lifesupport.iceMelt * A_MULT(l))}/s ice into water` },
-    { key: 'storage',    name: 'O₂ Reserve',  kind: 'mult', base: 18, max: 10,
+    { key: 'storage',      name: 'O₂ Reserve', kind: 'mult', base: 18, max: 10,
       hint: (l) => `oxygen capacity ${_r(CONFIG.baseCaps.oxygen * A_MULT(l))}` },
-    { key: 'efficiency', name: 'Efficiency',  kind: 'eff',  base: 22, max: 6,
+    { key: 'co2scrub',     name: 'CO₂ Scrubber', kind: 'mult', base: 24, max: 10,
+      hint: (l) => `scrubs ${_f(CONFIG.rooms.lifesupport.co2Scrub * A_MULT(l))}/s CO₂` },
+    { key: 'co2storage',   name: 'CO₂ Reserve', kind: 'mult', base: 18, max: 8,
+      hint: (l) => `CO₂ buffer before danger ${_r(CONFIG.baseCaps.co2 * A_MULT(l))}` },
+    { key: 'water',        name: 'Water Reclaimer', kind: 'mult', base: 22, max: 10,
+      hint: (l) => `melts ${_f(CONFIG.rooms.lifesupport.iceMelt * A_MULT(l))}/s ice into water` },
+    { key: 'waterstorage', name: 'Water Reserve', kind: 'mult', base: 18, max: 8,
+      hint: (l) => `water capacity ${_r(CONFIG.baseCaps.water * A_MULT(l))}` },
+    { key: 'efficiency',   name: 'Efficiency',  kind: 'eff',  base: 22, max: 6,
       hint: (l) => `power draw −${_pct(l)}%` },
   ],
   extractor: [

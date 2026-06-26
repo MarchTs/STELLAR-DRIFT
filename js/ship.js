@@ -171,6 +171,8 @@ function updateShip(dt) {
     }
     p.running = p.path.length > 0;
     p.state = c.state; p.role = c.role; p.name = c.name;
+    // crew only "operate" (produce/rest/eat/heal) once physically at their target tile
+    c.atStation = p.path.length === 0 && Math.abs(p.px - (tt.x + 0.5) * TILE) < 10 && Math.abs(p.py - (tt.y + 0.5) * TILE) < 10;
   });
 
   // a hazard is "being repaired" only while its assigned engineer is physically on the spot
