@@ -83,12 +83,11 @@ function staffCountText(room) {
   }
   const role = def.staffRole;
   if (!role && room.type !== 'reactor') return '';
-  const staff = aliveCrew().filter(c => c.state === 'working' && c.roomId === room.id);
+  const present = aliveCrew().filter(c => c.state === 'working' && c.roomId === room.id && c.atStation);
   if (room.type === 'reactor') {
-    const eng = aliveCrew().filter(c => c.role === 'engineer' && c.state === 'working' && c.roomId === room.id).length;
-    return eng ? `${eng} engineer${eng > 1 ? 's' : ''}` : 'passive';
+    return present.length ? `${present.length} operating` : 'automated (low output)';
   }
-  return staff.length ? `${staff.length} working` : 'idle';
+  return present.length ? `${present.length} working` : 'idle';
 }
 
 function renderShip() {

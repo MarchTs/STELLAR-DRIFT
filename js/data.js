@@ -53,7 +53,7 @@ const CONFIG = {
 
   // ---- Room production (per second, per staffed room, at level 1) ----
   rooms: {
-    reactor:    { powerPassive: 5.0, powerPerStaff: 3.2 },
+    reactor:    { powerPassive: 2.0, powerPerStaff: 6.5 },   // small automated baseline; an operator does the real work
     // Life Support: melts ice->water, turns water+power->oxygen, scrubs co2
     lifesupport:{ powerCost: 2.0, o2Out: 4.2, waterCost: 0.35, iceMelt: 0.6, co2Scrub: 2.5 },
     // Mining Drone: mines minerals AND ice from the sector's finite stock; drilling vents CO₂

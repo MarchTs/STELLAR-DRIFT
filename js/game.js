@@ -228,7 +228,8 @@ function primaryMult(room) { const list = ROOM_ATTRS[room.type]; return (list &&
 function roomPowerDraw(room) {
   const def = CONFIG.rooms[room.type];
   if (!def || !def.powerCost) return 0;
-  if ((room.type === 'extractor' || room.type === 'hydroponics') && staffOn(room.id) <= 0) return 0;
+  // operator-run modules draw power only while actually being operated
+  if (['extractor', 'hydroponics', 'lifesupport'].includes(room.type) && staffOn(room.id) <= 0) return 0;
   let cost = def.powerCost * primaryMult(room);
   if (attrDef(room.type, 'efficiency')) cost *= attrEff(room, 'efficiency');
   return cost;
@@ -334,6 +335,11 @@ function pickWorkRoom(c) {
     const o2F = GAME.resources.oxygen / cap(GAME, 'oxygen');
     const co2F = GAME.resources.co2 / cap(GAME, 'co2');
     if ((o2F < 0.5 || co2F >= 0.6) && hasPower(GAME)) return leastStaffed(lsRooms);
+  }
+  // ...and the Reactor if power is failing and nobody is on it
+  const rxRooms = roomsOfType('reactor');
+  if (rxRooms[0] && assignedOn(rxRooms[0].id) <= 0 && GAME.resources.power < cap(GAME, 'power') * 0.55) {
+    return leastStaffed(rxRooms);
   }
   if (c.role === 'engineer') {
     const ls = roomsOfType('lifesupport'), reactor = roomsOfType('reactor');
