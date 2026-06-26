@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stellar Drift</title>
+  <link rel="stylesheet" href="style.css?v=12" />
+</head>
+<body>
+  <div id="app">
+    <!-- Top bar: title, sector, run time, resources, meta -->
+    <header id="topbar">
+      <div class="brand">
+        <span class="logo">◊</span>
+        <div>
+          <h1>STELLAR DRIFT</h1>
+          <div class="sub" id="run-sub">Sector 1 · 0:00</div>
+        </div>
+      </div>
+      <div id="resources" class="resources"></div>
+      <div class="top-actions">
+        <div class="cores" title="Salvage Cores (meta-currency)">
+          <span class="core-icon">✦</span><span id="core-count">0</span>
+        </div>
+        <button id="btn-meta" class="btn ghost">Upgrades</button>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- Ship grid -->
+      <section id="ship-pane" class="pane">
+        <div class="pane-head">
+          <h2>Ship</h2>
+          <div class="pane-actions">
+            <div id="sector-info" class="sector-info"></div>
+            <button id="btn-jump" class="btn small">Jump ⟶</button>
+          </div>
+        </div>
+        <div id="ship-stage" class="ship-stage">
+          <canvas id="ship-canvas"></canvas>
+          <div id="ship-tip" class="ship-tip hidden"></div>
+        </div>
+        <div id="build-tray" class="build-tray"></div>
+      </section>
+
+      <!-- Crew -->
+      <section id="crew-pane" class="pane">
+        <div class="pane-head"><h2>Crew</h2><span id="crew-count" class="muted"></span></div>
+        <div id="crew-list" class="crew-list"></div>
+      </section>
+    </main>
+
+    <!-- Event log -->
+    <footer id="logbar">
+      <div class="log-head">Ship Log</div>
+      <div id="log" class="log"></div>
+    </footer>
+  </div>
+
+  <!-- Detail / build modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card" id="modal-card"></div>
+  </div>
+
+  <script src="js/data.js?v=12"></script>
+  <script src="js/game.js?v=12"></script>
+  <script src="js/ui.js?v=12"></script>
+  <script src="js/ship.js?v=12"></script>
+  <script src="js/main.js?v=12"></script>
+</body>
+</html>

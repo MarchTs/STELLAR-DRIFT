@@ -1,0 +1,293 @@
+/* ============================================================
+   STELLAR DRIFT — rendering & interaction (DOM)
+   ============================================================ */
+
+const $ = sel => document.querySelector(sel);
+
+function fmt(n) {
+  n = Math.floor(n);
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e4) return (n / 1e3).toFixed(1) + 'k';
+  return '' + n;
+}
+function fmtTime(s) {
+  s = Math.floor(s);
+  const m = Math.floor(s / 60);
+  return m + ':' + String(s % 60).padStart(2, '0');
+}
+function fmtRate(r) {
+  if (Math.abs(r) < 0.05) return '';
+  const sign = r > 0 ? '+' : '';
+  return sign + r.toFixed(1) + '/s';
+}
+
+const RES_META = {
+  power:    { label: 'Power',    cls: 'power' },
+  oxygen:   { label: 'Oxygen',   cls: 'oxygen' },
+  co2:      { label: 'CO₂',      cls: 'co2', hazard: true },
+  water:    { label: 'Water',    cls: 'water' },
+  ice:      { label: 'Ice',      cls: 'ice' },
+  minerals: { label: 'Minerals', cls: 'minerals' },
+  food:     { label: 'Food',     cls: 'food' },
+  fuel:     { label: 'Fuel',     cls: 'fuel' },
+};
+
+// top bar groups: each group is a labelled cluster of resource meters
+const RES_GROUPS = [
+  { name: 'Power', keys: ['power'] },
+  { name: 'Life Support', keys: ['oxygen', 'co2'] },
+  { name: 'Storage', keys: ['food', 'water', 'ice', 'minerals'] },
+  { name: 'Fuel', keys: ['fuel'] },
+];
+
+let lastRates = { power: 0, oxygen: 0, co2: 0, water: 0, ice: 0, minerals: 0, food: 0, fuel: 0 };
+
+/* ---------------- top bar ---------------- */
+function resMeter(res) {
+  const m = RES_META[res];
+  const val = GAME.resources[res], max = cap(GAME, res);
+  const pct = clamp((val / max) * 100, 0, 100);
+  const rate = lastRates[res] || 0;
+  const rcls = rate > 0.05 ? 'up' : rate < -0.05 ? 'down' : '';
+  // CO₂ is a hazard meter: full = bad, so flip the rate colours and warn near the top
+  const danger = m.hazard && pct >= CONFIG.needs.co2Danger * 100;
+  return `<div class="res ${m.cls} ${danger ? 'danger' : ''}">
+    <div class="res-top"><span>${m.label}</span><span class="res-val">${fmt(val)}<span class="muted">/${fmt(max)}</span></span></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="rate ${m.hazard ? (rate > 0.05 ? 'down' : rate < -0.05 ? 'up' : '') : rcls}">${fmtRate(rate)}</div>
+  </div>`;
+}
+function renderTop() {
+  $('#run-sub').textContent = `Sector ${GAME.sector} · ${fmtTime(GAME.time)}`;
+  $('#core-count').textContent = fmt(META.cores);
+
+  $('#resources').innerHTML = RES_GROUPS.map(g =>
+    `<div class="res-group"><div class="res-group-label">${g.name}</div>
+      <div class="res-row">${g.keys.map(resMeter).join('')}</div></div>`
+  ).join('');
+}
+
+/* ---------------- ship grid ---------------- */
+function staffCountText(room) {
+  const def = ROOM_DEFS[room.type];
+  if (room.type === 'lifesupport') {
+    if (!hasPower(GAME)) return 'no power';
+    return staffOn(room.id) > 0 ? 'making O₂ · scrubbing CO₂' : 'idle — no operator';
+  }
+  if (def.auto && room.type !== 'reactor') {
+    if (room.type === 'medbay') return hasPower(GAME) ? 'online' : 'no power';
+    if (room.type === 'quarters') {
+      const sleeping = aliveCrew().filter(c => c.state === 'sleeping').length;
+      return `${sleeping} resting`;
+    }
+  }
+  const role = def.staffRole;
+  if (!role && room.type !== 'reactor') return '';
+  const staff = aliveCrew().filter(c => c.state === 'working' && c.roomId === room.id);
+  if (room.type === 'reactor') {
+    const eng = aliveCrew().filter(c => c.role === 'engineer' && c.state === 'working' && c.roomId === room.id).length;
+    return eng ? `${eng} engineer${eng > 1 ? 's' : ''}` : 'passive';
+  }
+  return staff.length ? `${staff.length} working` : 'idle';
+}
+
+function renderShip() {
+  // The ship itself is drawn on the canvas by ship.js (drawShip()).
+  // Here we only render the build tray below it.
+  const tray = $('#build-tray');
+  if (!tray) return;
+  const types = buildableTypes();
+  if (types.length === 0) {
+    tray.innerHTML = `<div class="tray-msg">All ${MAX_ROOMS} bays occupied — upgrade existing rooms instead.</div>`;
+    return;
+  }
+  tray.innerHTML = types.map(type => {
+    const cost = buildCost(type);
+    const ok = canBuild(type);
+    return `<div class="build-chip ${ok ? '' : 'disabled'}" data-build="${type}" title="${ROOM_DEFS[type].desc}">
+      <span class="bc-name">+ ${ROOM_DEFS[type].name}</span>
+      <span class="bc-hint">${roomEffectText(type)}</span>
+      <span class="bc-cost">${cost} minerals</span>
+    </div>`;
+  }).join('');
+  tray.querySelectorAll('.build-chip').forEach(c =>
+    c.onclick = () => { if (buildRoom(c.dataset.build)) renderAll(); });
+}
+
+/* ---------------- crew ---------------- */
+function needRow(label, cls, val, max) {
+  const pct = clamp((val / (max || 100)) * 100, 0, 100);
+  const low = pct < 25 ? 'low' : '';
+  return `<div class="need ${cls} ${low}"><span class="nlabel">${label}</span>
+    <span class="nbar"><i style="width:${pct}%"></i></span></div>`;
+}
+function renderCrew() {
+  $('#crew-count').textContent = `${aliveCrew().length} alive`;
+  const list = $('#crew-list');
+  list.innerHTML = GAME.crew.map(c => {
+    const role = ROLES[c.role];
+    const dead = c.state === 'dead';
+    const maxH = crewMaxHealth();
+    return `<div class="crew ${dead ? 'dead' : ''}" style="--role:${role.color}">
+      <div class="crew-top">
+        <div>
+          <span class="crew-name">${c.name}</span>
+          <span class="crew-role">· ${role.name}</span>
+          <span class="crew-skill">${role.skill} L${c.skillLevel}</span>
+        </div>
+        <span class="crew-state ${c.state}">${dead ? '☠ dead' : c.state}</span>
+      </div>
+      ${dead ? '' : `<div class="needs">
+        ${needRow('Food', 'hunger', c.needs.hunger)}
+        ${needRow('Rest', 'energy', c.needs.energy)}
+        ${needRow('Health', 'health', c.needs.health, maxH)}
+        ${needRow('Morale', 'morale', c.needs.morale)}
+      </div>`}
+    </div>`;
+  }).join('');
+}
+
+/* ---------------- log ---------------- */
+function renderLog() {
+  $('#log').innerHTML = GAME.log.map(e =>
+    `<div class="entry"><span class="ts">${fmtTime(e.t)}</span><span class="${e.kind}">${e.text}</span></div>`
+  ).join('');
+}
+
+/* ---------------- buttons state ---------------- */
+function renderControls() {
+  $('#btn-jump').disabled = !canJump();
+  $('#btn-jump').textContent = `Jump ⟶ (${CONFIG.jump.fuelCost} fuel)`;
+  const si = $('#sector-info');
+  if (si && GAME.stock) {
+    const low = GAME.stock.minerals < 30 && GAME.stock.ice < 30;
+    si.innerHTML = `<span class="si-sector">Sector ${GAME.sector}</span>
+      <span class="si-stock"><b style="color:var(--minerals)">${fmt(GAME.stock.minerals)}</b> ore</span>
+      <span class="si-stock"><b style="color:var(--ice)">${fmt(GAME.stock.ice)}</b> ice</span>
+      <span class="muted">${low ? 'depleted — jump out' : 'in sector'}</span>`;
+  }
+}
+
+function renderAll() {
+  if (!GAME) return;
+  renderTop();
+  renderShip();
+  renderCrew();
+  renderLog();
+  renderControls();
+}
+
+/* ============================================================
+   Modals
+   ============================================================ */
+function openModal(html) {
+  $('#modal-card').innerHTML = `<div class="modal-pad">${html}</div>`;
+  $('#modal').classList.remove('hidden');
+}
+function closeModal() { $('#modal').classList.add('hidden'); }
+
+/* summary line for build-tray chips: the room's primary attribute at L1 */
+function roomEffectText(type) {
+  const def = (ROOM_ATTRS[type] || [])[0];
+  return def ? def.hint(1) : '';
+}
+
+/* room detail — one upgradeable row per attribute */
+function openRoomDetail(roomId, mode) {
+  const room = GAME.rooms.find(r => r.id === roomId);
+  if (!room) return;
+  const def = ROOM_DEFS[room.type];
+  const confirming = mode === 'confirm';
+  const refund = removeRefund(room.type);
+
+  const attrRows = (ROOM_ATTRS[room.type] || []).map(a => {
+    const lvl = attrLvl(room, a.key);
+    const maxed = attrMaxed(room, a.key);
+    const cost = maxed ? 0 : attrUpgradeCost(room, a.key);
+    const afford = canUpgradeAttr(room, a.key);
+    return `<div class="attr">
+      <div class="attr-head"><span class="attr-name">${a.name}</span><span class="attr-lvl">L${lvl}${maxed ? ' · MAX' : ''}</span></div>
+      <div class="attr-now">${a.hint(lvl)}</div>
+      ${maxed ? '' : `<div class="attr-next hint-next">→ ${a.hint(lvl + 1)}</div>`}
+      <div class="attr-foot">
+        ${maxed ? '<span class="u-cost">Fully upgraded</span>'
+          : `<button class="btn small ${afford ? 'primary' : ''}" ${afford ? '' : 'disabled'} onclick="doUpgradeAttr('${room.id}','${a.key}')">Upgrade · ${cost} min</button>`}
+      </div>
+    </div>`;
+  }).join('');
+
+  openModal(`
+    <span class="close" onclick="closeModal()">×</span>
+    <h2>${def.icon} ${def.name}</h2>
+    <p class="muted">${def.desc}</p>
+    <div class="detail-row"><span>Status</span><span>${staffCountText(room)}</span></div>
+    ${CONFIG.rooms[room.type] && CONFIG.rooms[room.type].powerCost
+      ? `<div class="detail-row"><span>Power draw</span><span style="color:var(--power)">${(CONFIG.rooms[room.type].powerCost * primaryMult(room) * (attrDef(room.type,'efficiency') ? attrEff(room,'efficiency') : 1)).toFixed(1)}/s</span></div>` : ''}
+    <div class="attr-grid">${attrRows}</div>
+    <div class="row-actions">
+      ${confirming
+        ? `<span class="muted" style="flex:1">Demolish this ${def.name}? You get back <b style="color:var(--minerals)">${refund} minerals</b>.</span>
+           <button class="btn danger" onclick="doRemoveRoom('${room.id}')">Confirm demolish</button>
+           <button class="btn" onclick="openRoomDetail('${room.id}')">Cancel</button>`
+        : `<button class="btn danger-ghost" onclick="openRoomDetail('${room.id}','confirm')">Demolish</button>
+           <button class="btn" onclick="closeModal()">Close</button>`}
+    </div>
+  `);
+}
+function doUpgradeAttr(roomId, key) {
+  if (upgradeAttr(roomId, key)) { renderAll(); openRoomDetail(roomId); }
+}
+function doRemoveRoom(roomId) {
+  if (removeRoom(roomId)) { renderAll(); closeModal(); }
+}
+
+/* meta hub */
+function openMetaHub() {
+  const cats = ['Start', 'Survival'];
+  let body = `<span class="close" onclick="closeModal()">×</span>
+    <h2>Salvage Bay</h2>
+    <p class="muted">Spend <b style="color:var(--core)">✦ ${fmt(META.cores)}</b> salvage cores on permanent upgrades. They apply to every future run.</p>`;
+  cats.forEach(cat => {
+    body += `<div class="section-title">${cat === 'Start' ? 'Starting Conditions' : 'Survivability'}</div><div class="upg-grid">`;
+    META_UPGRADES.filter(u => u.cat === cat).forEach(u => {
+      const lvl = metaLevel(u.id);
+      const maxed = lvl >= u.max;
+      const cost = maxed ? 0 : u.cost(lvl);
+      const afford = META.cores >= cost && !maxed;
+      body += `<div class="upg ${maxed ? 'maxed' : ''}">
+        <div class="u-top"><span class="u-name">${u.name}</span><span class="u-cat">${u.cat}</span></div>
+        <div class="u-desc">${u.desc(maxed ? lvl - 1 : lvl)}</div>
+        <div class="u-blurb">${u.blurb}</div>
+        <div class="u-foot">
+          <span class="u-lvl">Lv ${lvl}/${u.max}</span>
+          ${maxed ? '<span class="u-cost">MAX</span>'
+            : `<button class="btn small ${afford ? 'primary' : ''}" ${afford ? '' : 'disabled'} onclick="doBuy('${u.id}')">✦ ${cost}</button>`}
+        </div>
+      </div>`;
+    });
+    body += `</div>`;
+  });
+  body += `<div class="row-actions"><button class="btn" onclick="closeModal()">Close</button></div>`;
+  openModal(body);
+}
+function doBuy(id) { if (buyUpgrade(id)) openMetaHub(); renderTop(); }
+
+/* game over */
+function openGameOver() {
+  openModal(`
+    <h2 style="color:var(--bad)">All Hands Lost</h2>
+    <p class="muted">Your crew didn't make it. But their salvage lives on.</p>
+    <div class="gameover-stats">
+      <div class="stat"><div class="v">${GAME.sector}</div><div class="k">Sector reached</div></div>
+      <div class="stat"><div class="v">${fmtTime(GAME.time)}</div><div class="k">Time survived</div></div>
+      <div class="stat"><div class="v">${GAME.roomsBuilt}</div><div class="k">Rooms built</div></div>
+      <div class="stat"><div class="v">${GAME.peakCrew}</div><div class="k">Peak crew</div></div>
+    </div>
+    <div class="earned">Salvage banked: <b>✦ ${GAME.coresEarned}</b></div>
+    <div class="row-actions">
+      <button class="btn primary" onclick="goMetaThenNew()">Spend & Upgrade</button>
+      <button class="btn" onclick="startNewRun()">New Run ⟶</button>
+    </div>
+  `);
+}
+function goMetaThenNew() { openMetaHub(); }
