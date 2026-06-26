@@ -2,15 +2,20 @@
 /* ----------------------------------------------------------
    Events
    ---------------------------------------------------------- */
-const REPAIR_RATE = 1.0;   // repair work done per second by an engineer at the hazard
+const REPAIR_RATE = 1.0;   // base repair work/sec; scaled by the repairer's Engineering
 function isHazard(ev) { return ev.id === 'hull_breach' || ev.id === 'power_failure'; }
 function tickEvents(dt) {
   GAME.events.forEach(ev => {
     ev.duration -= dt;        // duration is a safety cap; hazards normally end via repair
-    // located hazards: repair only advances while an assigned engineer stands on it
-    // (ev.beingRepaired is set by the ship view each frame). Completing the work seals it.
+    // located hazards: repair only advances while the assigned crew stands on it,
+    // and faster the better their Engineering skill. (ev.beingRepaired set by the ship view.)
     if (ev.needsRepair) {
-      if (ev.beingRepaired) ev.repairProg = (ev.repairProg || 0) + REPAIR_RATE * dt;
+      if (ev.beingRepaired) {
+        const c = GAME.crew.find(x => x.id === ev.assignedTo);
+        const eng = c ? 1 + (crewSkillLevel(c, 'engineering') - 1) * CONFIG.skill.outputPerLevel : 1;
+        ev.repairProg = (ev.repairProg || 0) + REPAIR_RATE * eng * dt;
+        if (c) gainSkill(c, 'engineering', dt);   // repairing trains Engineering
+      }
       if ((ev.repairProg || 0) >= ev.repairNeeded) ev.duration = 0;
     }
   });

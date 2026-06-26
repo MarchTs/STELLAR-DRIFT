@@ -70,6 +70,7 @@ function resourceBreakdown(res) {
     const breach = activeEvent('hull_breach'); if (breach) add(sinks, 'Hull breach', breach.o2Drain);
   } else if (res === 'co2') {
     add(sources, `Crew exhaling ×${headcount}`, headcount * N.co2PerCrew);
+    roomsOfType('reactor').forEach((r, i, a) => add(sources, 'Reactor' + tag(a, i), RM.reactor.co2Out * attrMult(r, 'output')));
     if (powered) roomsOfType('extractor').forEach(r => { if (staffOn(r.id) > 0) add(sources, 'Mining (drilling)', RM.extractor.co2Out * attrMult(r, 'output')); });
     GAME.events.forEach(ev => { if (ev.co2Out) add(sources, ev.name || 'Hazard', ev.co2Out); });
     if (powered) roomsOfType('lifesupport').forEach(r => { if (staffOn(r.id) > 0) add(sinks, 'Life Support (scrub)', RM.lifesupport.co2Scrub * attrMult(r, 'co2scrub')); });

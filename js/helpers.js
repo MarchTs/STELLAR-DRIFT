@@ -28,6 +28,16 @@ function seatCount(room) { const d = attrDef(room.type, 'seats'); return d ? A_B
 function totalSeats() { return roomsOfType('messhall').reduce((s, r) => s + seatCount(r), 0); }
 function countState(s) { return GAME.crew.filter(c => c.state === s).length; }
 function crewSkillLevel(crew, key) { return (crew.skills[key] && crew.skills[key].level) || 1; }
+// award skill XP over dt, levelling up when the threshold is reached
+function gainSkill(crew, key, dt) {
+  const s = crew.skills[key]; if (!s) return;
+  s.xp += CONFIG.skill.xpPerSecondWorking * dt;
+  const need = CONFIG.skill.xpToLevel * s.level;
+  if (s.level < CONFIG.skill.maxLevel && s.xp >= need) {
+    s.xp -= need; s.level++;
+    logMsg(`${crew.name} reached ${SKILLS[key].name} level ${s.level}.`, 'good');
+  }
+}
 // efficiency a crew brings to a given room, based on that room's skill
 function roomSkillMult(crew, room) {
   const sk = ROOM_SKILL[room.type];

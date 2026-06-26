@@ -100,6 +100,8 @@ function step(dt) {
   const headcount = aliveCrew().length;
   R.oxygen -= headcount * N.o2PerCrew * o2SlowMult * dt;
   R.co2 += headcount * N.co2PerCrew * dt;
+  // the reactor vents CO2 as it runs (scales with its output level)
+  roomsOfType('reactor').forEach(r => { R.co2 += CONFIG.rooms.reactor.co2Out * attrMult(r, 'output') * dt; });
   // wrecked / burning modules leak CO2 while their event is active
   GAME.events.forEach(ev => { if (ev.co2Out) R.co2 += ev.co2Out * dt; });
   const breach = activeEvent('hull_breach');
@@ -193,15 +195,7 @@ function step(dt) {
     if (c.state === 'working' && c.roomId && c.atStation) {
       const room = GAME.rooms.find(r => r.id === c.roomId);
       const sk = room && ROOM_SKILL[room.type];
-      if (sk) {
-        const s = c.skills[sk];
-        s.xp += CONFIG.skill.xpPerSecondWorking * dt;
-        const need = CONFIG.skill.xpToLevel * s.level;
-        if (s.level < CONFIG.skill.maxLevel && s.xp >= need) {
-          s.xp -= need; s.level++;
-          logMsg(`${c.name} reached ${SKILLS[sk].name} level ${s.level}.`, 'good');
-        }
-      }
+      if (sk) gainSkill(c, sk, dt);
     }
 
     // death

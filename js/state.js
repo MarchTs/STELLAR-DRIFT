@@ -25,6 +25,7 @@ const RES_CAP_SRC = {
   co2:      { type: 'lifesupport', attr: 'co2storage' },
   water:    { type: 'lifesupport', attr: 'waterstorage' },
   minerals: { type: 'extractor',   attr: 'storage' },
+  ice:      { type: 'extractor',   attr: 'icestorage' },
   food:     { type: 'hydroponics', attr: 'storage' },
   fuel:     { type: 'engine',      attr: 'fuelstorage' },
 };

@@ -54,7 +54,7 @@ const CONFIG = {
 
   // ---- Room production (per second, per staffed room, at level 1) ----
   rooms: {
-    reactor:    { powerPassive: 2.0, powerPerStaff: 6.5 },   // small automated baseline; an operator does the real work
+    reactor:    { powerPassive: 2.0, powerPerStaff: 6.5, co2Out: 0.5 },   // small automated baseline; an operator does the real work; vents CO₂
     // Life Support: melts ice->water, turns water+power->oxygen, scrubs co2
     lifesupport:{ powerCost: 2.0, o2Out: 4.2, waterCost: 0.35, iceMelt: 0.6, co2Scrub: 2.5 },
     // Mining Drone: mines minerals AND ice from the sector's finite stock; drilling vents CO₂
@@ -142,7 +142,7 @@ const ROOM_SKILL = { reactor: 'engineering', lifesupport: 'engineering', extract
 // Room definitions (display + behavior flags)
 // ------------------------------------------------------------
 const ROOM_DEFS = {
-  reactor:     { name: 'Reactor',     icon: '⚛', auto: true,  desc: 'An operator generates power here — the better their Engineering, the more output.' },
+  reactor:     { name: 'Reactor',     icon: '⚛', auto: true,  desc: 'An operator generates power here — the better their Engineering, the more output. Vents CO₂ as it runs.' },
   lifesupport: { name: 'Life Support',icon: '☁', auto: true,  desc: 'An operator makes oxygen from water and scrubs CO₂. Engineering skill improves it. Idle when nobody is aboard it.' },
   extractor:   { name: 'Mining Drone', icon: '⛏', auto: false, desc: 'An operator mines minerals and ice from the sector. Mining skill improves yield. Drilling vents CO₂. Needs power.' },
   hydroponics: { name: 'Hydroponics', icon: '❀', auto: false, desc: 'An operator grows food from water + oxygen. Botany skill improves yield. Needs power.' },
@@ -201,6 +201,8 @@ const ROOM_ATTRS = {
       hint: (l) => `+${_f(CONFIG.rooms.extractor.mineralsOut * A_MULT(l))}/s minerals per miner` },
     { key: 'storage',    name: 'Mineral Storage', kind: 'mult', base: 18, max: 10,
       hint: (l) => `mineral capacity ${_r(CONFIG.baseCaps.minerals * A_MULT(l))}` },
+    { key: 'icestorage', name: 'Ice Storage',     kind: 'mult', base: 18, max: 10,
+      hint: (l) => `ice capacity ${_r(CONFIG.baseCaps.ice * A_MULT(l))}` },
     { key: 'efficiency', name: 'Efficiency',      kind: 'eff',  base: 22, max: 6,
       hint: (l) => `power draw −${_pct(l)}%` },
   ],
