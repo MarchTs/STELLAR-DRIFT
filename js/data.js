@@ -39,6 +39,7 @@ const CONFIG = {
     moraleRecover: 1.6,       // when all needs healthy
     moraleDecay: 1.2,         // when a need is low
     eatNoMessMorale: 3.0,     // morale lost/sec while eating without a Mess Hall (eating at Hydroponics)
+    messMorale: 2.5,          // morale GAINED/sec while eating in a Mess Hall (× Meal Quality)
   },
 
   // thresholds the crew AI uses (defaults; per-crew adjustable)
@@ -76,6 +77,7 @@ const CONFIG = {
     lifesupport: 65,
     reactor: 80,
     engine: 70,
+    messhall: 55,
     upgradeBase: 30,    // upgrade cost = upgradeBase * level * 1.6
     upgradeMult: 1.6,
   },
@@ -141,6 +143,7 @@ const ROOM_DEFS = {
   quarters:    { name: 'Quarters',    icon: '⏾', staffRole: null,       auto: true,  desc: 'Beds where tired crew sleep to restore energy.' },
   medbay:      { name: 'Medbay',      icon: '✚', staffRole: null,       auto: true,  desc: 'Injured or sick crew heal here. Needs power.' },
   engine:      { name: 'Engine',      icon: '🚀', staffRole: null,       auto: true,  desc: 'Stores fuel and drives FTL jumps. Upgrade for a bigger fuel reserve and cheaper jumps.' },
+  messhall:    { name: 'Mess Hall',   icon: '🍴', staffRole: null,       auto: true,  desc: 'A proper galley. Crew eat here for a morale boost instead of grazing the Hydroponics bay.' },
 };
 
 // random crew names
@@ -220,6 +223,12 @@ const ROOM_ATTRS = {
       hint: (l) => `fuel capacity ${_r(CONFIG.baseCaps.fuel * A_MULT(l))}` },
     { key: 'fuelefficiency', name: 'Fuel Efficiency', kind: 'eff',  base: 26, max: 6,
       hint: (l) => `jump fuel cost −${_pct(l)}%` },
+  ],
+  messhall: [
+    { key: 'quality', name: 'Meal Quality', kind: 'mult', base: 24, max: 10,
+      hint: (l) => `+${_f(CONFIG.needs.messMorale * A_MULT(l))}/s morale while eating` },
+    { key: 'seats',   name: 'Seats',        kind: 'beds', base: 24, max: 6, baseN: 3,
+      hint: (l) => `${A_BEDS(3, l)} seats` },
   ],
 };
 

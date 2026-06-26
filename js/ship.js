@@ -118,12 +118,13 @@ function updateShip(dt) {
   ensureLayout();
   const alive = GAME.crew.filter(c => c.state !== 'dead');
 
-  // group crew so co-workers / co-sleepers / patients get distinct tiles
-  const workOrder = {}, sleepers = [], patients = [];
+  // group crew so co-workers / co-sleepers / patients / diners get distinct tiles
+  const workOrder = {}, sleepers = [], patients = [], diners = [];
   alive.forEach(c => {
     if (c.state === 'working' && c.roomId) (workOrder[c.roomId] = workOrder[c.roomId] || []).push(c.id);
     else if (c.state === 'sleeping') sleepers.push(c.id);
     else if (c.state === 'healing') patients.push(c.id);
+    else if (c.state === 'eating') diners.push(c.id);
   });
 
   // place a location on any hazard that doesn't have one yet
@@ -142,7 +143,11 @@ function updateShip(dt) {
       const rb = roomAndBay('medbay');
       if (rb) { const beds = bedTiles(rb.bay, bedCount(rb.room)); return beds[Math.max(0, patients.indexOf(c.id)) % beds.length]; }
     }
-    if (c.state === 'eating') { const b = bayOfType('hydroponics'); if (b) return b.station; }
+    if (c.state === 'eating') {
+      const rbM = roomAndBay('messhall');
+      if (rbM) { const seats = bedTiles(rbM.bay, seatCount(rbM.room)); return seats[Math.max(0, diners.indexOf(c.id)) % seats.length]; }
+      const b = bayOfType('hydroponics'); if (b) return b.station;   // no Mess Hall -> graze the garden
+    }
     if (c.state === 'working' && c.roomId) {
       const b = bayForRoomId(c.roomId);
       if (b) { const t = standTiles(b); return t[Math.max(0, (workOrder[c.roomId] || []).indexOf(c.id)) % t.length]; }
@@ -223,11 +228,11 @@ function assignHazardTile(ev) {
 /* ---------------- colors ---------------- */
 const ROOM_FLOOR = {
   reactor: '#33282f', lifesupport: '#1c2b35', extractor: '#322f1f',
-  hydroponics: '#203121', quarters: '#272234', medbay: '#311f26', engine: '#2a2620',
+  hydroponics: '#203121', quarters: '#272234', medbay: '#311f26', engine: '#2a2620', messhall: '#2e2a1d',
 };
 const ROOM_ACCENT = {
   reactor: '#ffd25c', lifesupport: '#6fd3ff', extractor: '#c8a4ff',
-  hydroponics: '#9ad36f', quarters: '#9aa6c8', medbay: '#ff6b6b', engine: '#ff9d5c',
+  hydroponics: '#9ad36f', quarters: '#9aa6c8', medbay: '#ff6b6b', engine: '#ff9d5c', messhall: '#ffce5c',
 };
 const STATE_BADGE = { sleeping: 'z', eating: '◦', healing: '✚', repairing: '🔧' };
 
@@ -331,9 +336,11 @@ function drawShip() {
     if (r.bay >= 8) return;
     const b = bayRect(r.bay), def = ROOM_DEFS[r.type], ac = ROOM_ACCENT[r.type] || '#5cc8ff';
 
-    // beds for quarters / medbay (count scales with the Beds attribute)
-    if (r.type === 'quarters' || r.type === 'medbay') {
-      bedTiles(b, bedCount(r)).forEach(bt => {
+    // furniture: beds (quarters/medbay) or seats (mess hall), scaling with the attribute
+    const furniture = (r.type === 'quarters' || r.type === 'medbay') ? bedCount(r)
+      : r.type === 'messhall' ? seatCount(r) : 0;
+    if (furniture > 0) {
+      bedTiles(b, furniture).forEach(bt => {
         const p = tileCenter(bt.x, bt.y);
         ctx.fillStyle = 'rgba(255,255,255,.07)'; roundRect(ctx, p.x - 9, p.y - 6, 18, 12, 3); ctx.fill();
         ctx.fillStyle = ac; ctx.fillRect(p.x - 9, p.y - 6, 4, 12);

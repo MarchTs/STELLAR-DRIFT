@@ -236,6 +236,8 @@ function roomPowerDraw(room) {
 }
 function totalBeds() { return roomsOfType('quarters').reduce((s, r) => s + bedCount(r), 0); }
 function totalMedBeds() { return roomsOfType('medbay').reduce((s, r) => s + bedCount(r), 0); }
+function seatCount(room) { const d = attrDef(room.type, 'seats'); return d ? A_BEDS(d.baseN, attrLvl(room, 'seats')) : 0; }
+function totalSeats() { return roomsOfType('messhall').reduce((s, r) => s + seatCount(r), 0); }
 function countState(s) { return GAME.crew.filter(c => c.state === s).length; }
 function skillMult(crew) { return 1 + (crew.skillLevel - 1) * CONFIG.skill.outputPerLevel; }
 function aliveCrew() { return GAME.crew.filter(c => c.state !== 'dead'); }
@@ -286,8 +288,9 @@ function updateCrewState(c) {
   // 2. sleep if exhausted and a berth is free
   const bedForSleep = c.state === 'sleeping' || countState('sleeping') < totalBeds();
   if (n.energy < c.restThreshold && bedForSleep) { setState(c, 'sleeping'); return; }
-  // 3. eat if hungry and food available
-  if (n.hunger < c.eatThreshold && GAME.resources.food > 1) { setState(c, 'eating'); return; }
+  // 3. eat if hungry and food available (Mess Hall seats are limited; Hydroponics grazing isn't)
+  const seatFree = roomsOfType('messhall').length === 0 || c.state === 'eating' || countState('eating') < totalSeats();
+  if (n.hunger < c.eatThreshold && GAME.resources.food > 1 && seatFree) { setState(c, 'eating'); return; }
 
   // if currently mid need-task and not yet at finish threshold, keep going
   if (c.state === 'sleeping' && n.energy < CONFIG.ai.wakeAt) return;
@@ -465,7 +468,6 @@ function step(dt) {
   // 6. CREW NEEDS
   const o2Low = GAME.resources.oxygen <= 0.5;
   const co2Bad = GAME.resources.co2 >= cap(GAME, 'co2') * N.co2Danger;   // CO₂ buildup hurts crew
-  const hasMessHall = roomsOfType('messhall').length > 0;                // crew eat at Hydroponics without one
   const qRoom = roomsOfType('quarters')[0], mRoom = roomsOfType('medbay')[0];
   const qMult = qRoom ? attrMult(qRoom, 'comfort') : 1;    // better Quarters -> faster rest
   const mMult = mRoom ? attrMult(mRoom, 'treatment') : 1;  // better Medbay   -> faster healing
@@ -501,8 +503,12 @@ function step(dt) {
     // morale: recovers when fed+rested, decays otherwise
     const needsOk = n.hunger > 40 && n.energy > 40 && !o2Low;
     n.morale += (needsOk ? N.moraleRecover : -N.moraleDecay) * dt;
-    // eating at the Hydroponics bay (no proper Mess Hall) is grim — it costs morale
-    if (c.state === 'eating' && c.atStation && !hasMessHall) n.morale -= N.eatNoMessMorale * dt;
+    // eating: a Mess Hall lifts morale; grazing the Hydroponics bay (no Mess Hall) lowers it
+    if (c.state === 'eating' && c.atStation) {
+      const mess = roomsOfType('messhall')[0];
+      if (mess) n.morale += N.messMorale * attrMult(mess, 'quality') * dt;
+      else n.morale -= N.eatNoMessMorale * dt;
+    }
 
     // clamp
     n.hunger = clamp(n.hunger, 0, 100);
@@ -651,8 +657,8 @@ function doJump() {
    Build / upgrade rooms
    ---------------------------------------------------------- */
 const MAX_ROOMS = 8;   // the ship has 8 bays (see js/ship.js)
-const BUILDABLE = ['extractor', 'hydroponics', 'quarters', 'medbay', 'lifesupport', 'reactor', 'engine'];
-const SINGLE_INSTANCE = { medbay: 1, engine: 1 };   // at most one of these
+const BUILDABLE = ['extractor', 'hydroponics', 'quarters', 'medbay', 'messhall', 'lifesupport', 'reactor', 'engine'];
+const SINGLE_INSTANCE = { medbay: 1, engine: 1, messhall: 1 };   // at most one of these
 function shipFull() { return GAME.rooms.length >= MAX_ROOMS; }
 function bayOccupied(bay) { return GAME.rooms.some(r => r.bay === bay); }
 function firstEmptyBay() { for (let i = 0; i < MAX_ROOMS; i++) if (!bayOccupied(i)) return i; return -1; }
