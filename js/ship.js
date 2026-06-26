@@ -257,7 +257,9 @@ function setupCanvas() {
   if (!cv) return;
   const dpr = window.devicePixelRatio || 1;
   cv.width = WIDTH * dpr; cv.height = HEIGHT * dpr;
-  cv.style.width = WIDTH + 'px'; cv.style.height = HEIGHT + 'px';
+  // natural size up to the pane width; max-width:100% + height:auto scales it
+  // down proportionally (zoom out) when the hull gets wide
+  cv.style.width = WIDTH + 'px'; cv.style.height = 'auto';
   cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
   STARS = [];                              // (re)scatter stars to fill the current width
   for (let i = 0; i < 60; i++) STARS.push({ x: Math.random() * WIDTH, y: Math.random() * HEIGHT, r: Math.random() * 1.2 + 0.2, a: Math.random() * 0.5 + 0.2 });
@@ -436,6 +438,15 @@ function drawPawn(ctx, p) {
 }
 
 /* ---------------- interaction ---------------- */
+// map a mouse event to tile coords, accounting for CSS scaling (the canvas is
+// scaled down to fit the pane when the hull is wide)
+function eventTile(cv, e) {
+  const rect = cv.getBoundingClientRect();
+  return {
+    tx: Math.floor((e.clientX - rect.left) / rect.width * COLS),
+    ty: Math.floor((e.clientY - rect.top) / rect.height * ROWS),
+  };
+}
 function bayAtTile(tx, ty) {
   for (let i = 0; i < bayCount(); i++) {
     const b = bayRect(i);
@@ -450,15 +461,13 @@ function initShip() {
   const cv = document.querySelector('#ship-canvas');
   if (!cv) return;
   cv.onmousemove = e => {
-    const rect = cv.getBoundingClientRect();
-    const tx = Math.floor((e.clientX - rect.left) / TILE), ty = Math.floor((e.clientY - rect.top) / TILE);
+    const { tx, ty } = eventTile(cv, e);
     hoverBay = bayAtTile(tx, ty);
     cv.style.cursor = hoverBay >= 0 ? 'pointer' : 'default';
   };
   cv.onmouseleave = () => { hoverBay = -1; };
   cv.onclick = e => {
-    const rect = cv.getBoundingClientRect();
-    const tx = Math.floor((e.clientX - rect.left) / TILE), ty = Math.floor((e.clientY - rect.top) / TILE);
+    const { tx, ty } = eventTile(cv, e);
     const i = bayAtTile(tx, ty);
     if (i < 0) return;
     const room = roomInBay(i);
