@@ -123,23 +123,26 @@ const CONFIG = {
 };
 
 // ------------------------------------------------------------
-// Role definitions
+// Skills — every crew member has a level in each. Anyone can do any job;
+// the relevant skill makes them more efficient at it.
 // ------------------------------------------------------------
-// `staffs` is an ordered list of room types a role can operate (first = default).
-const ROLES = {
-  engineer: { name: 'Engineer', staffs: ['reactor', 'lifesupport'], skill: 'Engineering', color: '#ffb454' },
-  miner:    { name: 'Miner',    staffs: ['extractor'],   skill: 'Mining',  color: '#6fd3c7' },
-  botanist: { name: 'Botanist', staffs: ['hydroponics'], skill: 'Botany',  color: '#9ad36f' },
+const SKILLS = {
+  engineering: { name: 'Engineering', color: '#ffb454' },   // reactor, life support, repairs
+  mining:      { name: 'Mining',      color: '#6fd3c7' },   // mining drone
+  botany:      { name: 'Botany',      color: '#9ad36f' },   // hydroponics
 };
+const SKILL_KEYS = ['engineering', 'mining', 'botany'];
+// which skill a module's work draws on (modules not listed need no skilled operator)
+const ROOM_SKILL = { reactor: 'engineering', lifesupport: 'engineering', extractor: 'mining', hydroponics: 'botany' };
 
 // ------------------------------------------------------------
 // Room definitions (display + behavior flags)
 // ------------------------------------------------------------
 const ROOM_DEFS = {
-  reactor:     { name: 'Reactor',     icon: '⚛', staffRole: 'engineer', auto: true,  desc: 'Generates power. An on-duty engineer boosts output.' },
-  lifesupport: { name: 'Life Support',icon: '☁', staffRole: 'engineer', auto: true,  desc: 'An engineer operates it to make oxygen from water and scrub CO₂. Idle when nobody is aboard it.' },
-  extractor:   { name: 'Mining Drone', icon: '⛏', staffRole: 'miner',    auto: false, desc: 'Mines minerals and ice from the sector when operated by a miner. Drilling vents CO₂ — more when upgraded. Needs power.' },
-  hydroponics: { name: 'Hydroponics', icon: '❀', staffRole: 'botanist', auto: false, desc: 'Grows food from water + oxygen when staffed by a botanist. Needs power.' },
+  reactor:     { name: 'Reactor',     icon: '⚛', auto: true,  desc: 'An operator generates power here — the better their Engineering, the more output.' },
+  lifesupport: { name: 'Life Support',icon: '☁', auto: true,  desc: 'An operator makes oxygen from water and scrubs CO₂. Engineering skill improves it. Idle when nobody is aboard it.' },
+  extractor:   { name: 'Mining Drone', icon: '⛏', auto: false, desc: 'An operator mines minerals and ice from the sector. Mining skill improves yield. Drilling vents CO₂. Needs power.' },
+  hydroponics: { name: 'Hydroponics', icon: '❀', auto: false, desc: 'An operator grows food from water + oxygen. Botany skill improves yield. Needs power.' },
   quarters:    { name: 'Quarters',    icon: '⏾', staffRole: null,       auto: true,  desc: 'Beds where tired crew sleep to restore energy.' },
   medbay:      { name: 'Medbay',      icon: '✚', staffRole: null,       auto: true,  desc: 'Injured or sick crew heal here. Needs power.' },
   engine:      { name: 'Engine',      icon: '🚀', staffRole: null,       auto: true,  desc: 'Stores fuel and drives FTL jumps. Upgrade for a bigger fuel reserve and cheaper jumps.' },

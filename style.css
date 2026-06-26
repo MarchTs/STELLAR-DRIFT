@@ -200,6 +200,12 @@ body {
 .crew-state.idle { color: var(--muted); }
 .crew-state.dead { color: var(--bad); }
 .crew-skill { font-size: 11px; color: var(--accent); }
+.crew-skills { display: flex; gap: 5px; margin: 6px 0 2px; }
+.crew-skills .sk {
+  font-size: 10px; padding: 1px 6px; border-radius: 10px; color: var(--muted);
+  background: var(--bg2); border: 1px solid var(--line); font-variant-numeric: tabular-nums;
+}
+.crew-skills .sk.top { color: #0a1018; background: var(--sk); border-color: var(--sk); font-weight: 700; }
 .needs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 12px; margin-top: 8px; }
 .need { display: flex; align-items: center; gap: 6px; font-size: 10px; }
 .need .nlabel { width: 42px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }

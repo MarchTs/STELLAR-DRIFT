@@ -156,8 +156,7 @@ function updateShip(dt) {
       const i = alive.indexOf(c);
       return { x: 6 + (i * 3) % 11, y: 5 + (i % 2) };
     }
-    const b = bayOfType(ROLES[c.role].staffs[0]);
-    return b ? b.station : { x: 10, y: 5 };          // fallback: corridor
+    return { x: 10, y: 5 };                            // fallback: corridor
   }
 
   alive.forEach(c => {
@@ -177,7 +176,7 @@ function updateShip(dt) {
       else { p.px += dx / d * budget; p.py += dy / d * budget; budget = 0; }
     }
     p.running = p.path.length > 0;
-    p.state = c.state; p.role = c.role; p.name = c.name;
+    p.state = c.state; p.color = c.color; p.name = c.name;
     // crew only "operate" (produce/rest/eat/heal) once physically at their target tile
     c.atStation = p.path.length === 0 && Math.abs(p.px - (tt.x + 0.5) * TILE) < 10 && Math.abs(p.py - (tt.y + 0.5) * TILE) < 10;
   });
@@ -399,7 +398,7 @@ function drawHazard(ctx, ev) {
 }
 
 function drawPawn(ctx, p) {
-  const color = (ROLES[p.role] && ROLES[p.role].color) || '#5cc8ff';
+  const color = p.color || '#5cc8ff';
   const bob = p.running ? Math.sin(performance.now() / 90 + p.px) * 2.5 : 0;
   const y = p.py + bob;
 

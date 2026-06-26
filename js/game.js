@@ -12,7 +12,7 @@ function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 let GAME = null;   // run state
 let META = null;   // persistent meta state
 
-const SAVE_KEY = 'stellardrift.save.v4';
+const SAVE_KEY = 'stellardrift.save.v5';
 const META_KEY = 'stellardrift.meta.v1';
 
 /* ----------------------------------------------------------
@@ -109,15 +109,19 @@ function crewMaxHealth() { return 100 + metaLevel('max_health') * 20; }
 /* ----------------------------------------------------------
    New run — applies meta upgrades to the starting state
    ---------------------------------------------------------- */
-function makeCrew(role, skillLvl) {
+// specialty = the skill this crew starts strong in (sets their colour & a head start)
+function makeCrew(specialty, specialtyLevel) {
+  const skills = {};
+  SKILL_KEYS.forEach(k => { skills[k] = { level: 1, xp: 0 }; });
+  if (specialty) skills[specialty].level = Math.max(1, specialtyLevel || 1);
   return {
     id: 'c' + Math.floor(rngFloat() * 1e9).toString(36),
     name: pick(CREW_NAMES),
-    role,
-    skillLevel: skillLvl,
-    xp: 0,
+    specialty: specialty || pick(SKILL_KEYS),
+    color: SKILLS[specialty || 'engineering'].color,
+    skills,
     needs: { hunger: 80, energy: 90, health: crewMaxHealth(), morale: 80 },
-    state: 'idle',       // working | sleeping | eating | healing | idle | dead
+    state: 'idle',       // working | sleeping | eating | healing | repairing | idle | dead
     roomId: null,
     restThreshold: CONFIG.ai.restThreshold,
     eatThreshold: CONFIG.ai.eatThreshold,
@@ -131,15 +135,17 @@ function makeRoom(type, bay) {
 }
 
 function newRun() {
-  const baseSkill = metaLevel('start_skill') ? 1 + metaLevel('start_skill') : 1;
+  // each starting crew is strong in one skill (but can do anything)
+  const startLevel = 3 + metaLevel('start_skill');
+  const crew = SKILL_KEYS.map(sp => makeCrew(sp, startLevel));
 
-  const roles = ['engineer', 'miner', 'botanist'];
-  const crew = roles.map(r => makeCrew(r, baseSkill));
-
-  // extra crew from meta (random roles)
+  // extra crew from meta (random specialty)
   for (let i = 0; i < metaLevel('extra_crew'); i++) {
-    crew.push(makeCrew(pick(roles), baseSkill));
+    crew.push(makeCrew(pick(SKILL_KEYS), startLevel));
   }
+  // ensure unique names
+  const used = new Set();
+  crew.forEach(c => { let n = 0; while (used.has(c.name) && n++ < 50) c.name = pick(CREW_NAMES); used.add(c.name); });
 
   const rooms = [
     makeRoom('reactor', 0), makeRoom('lifesupport', 1), makeRoom('extractor', 2),
@@ -191,6 +197,17 @@ function loadGame() {
       }
       if (r.bay === undefined) r.bay = i;
     });
+    // migrate pre-skill crew (role + single skillLevel) -> per-skill levels
+    const ROLE_SKILL = { engineer: 'engineering', miner: 'mining', botanist: 'botany' };
+    if (GAME && GAME.crew) GAME.crew.forEach(c => {
+      if (!c.skills) {
+        const sp = ROLE_SKILL[c.role] || 'engineering';
+        c.skills = {}; SKILL_KEYS.forEach(k => { c.skills[k] = { level: 1, xp: 0 }; });
+        c.skills[sp].level = c.skillLevel || 1;
+        c.specialty = sp; c.color = SKILLS[sp].color;
+        delete c.role; delete c.skillLevel; delete c.xp;
+      }
+    });
     // backfill any resources / sector stock added in later versions
     if (GAME && GAME.resources) {
       Object.keys(CONFIG.baseCaps).forEach(res => {
@@ -239,7 +256,13 @@ function totalMedBeds() { return roomsOfType('medbay').reduce((s, r) => s + bedC
 function seatCount(room) { const d = attrDef(room.type, 'seats'); return d ? A_BEDS(d.baseN, attrLvl(room, 'seats')) : 0; }
 function totalSeats() { return roomsOfType('messhall').reduce((s, r) => s + seatCount(r), 0); }
 function countState(s) { return GAME.crew.filter(c => c.state === s).length; }
-function skillMult(crew) { return 1 + (crew.skillLevel - 1) * CONFIG.skill.outputPerLevel; }
+function crewSkillLevel(crew, key) { return (crew.skills[key] && crew.skills[key].level) || 1; }
+// efficiency a crew brings to a given room, based on that room's skill
+function roomSkillMult(crew, room) {
+  const sk = ROOM_SKILL[room.type];
+  if (!sk) return 1;
+  return 1 + (crewSkillLevel(crew, sk) - 1) * CONFIG.skill.outputPerLevel;
+}
 function aliveCrew() { return GAME.crew.filter(c => c.state !== 'dead'); }
 function hasPower(st) { return st.resources.power > 0.5; }
 
@@ -281,7 +304,7 @@ function updateCrewState(c) {
   const bedForHeal = c.state === 'healing' || countState('healing') < totalMedBeds();
   if (n.health < CONFIG.ai.healThreshold && canHeal && bedForHeal) { setState(c, 'healing'); return; }
   // 1b. EMERGENCY: an engineer drops everything to run to an active hazard and repair it
-  if (c.role === 'engineer' && n.health > 12) {
+  if (n.health > 12) {
     const job = claimRepairJob(c);
     if (job) { c.state = 'repairing'; c.roomId = null; return; }
   }
@@ -313,63 +336,41 @@ function setState(c, s) {
   }
 }
 
-// among the rooms this crew can operate, pick the one that most needs them
-function leastStaffed(rooms) {
-  let best = rooms[0], bestN = Infinity;
-  rooms.forEach(r => {
-    const n = GAME.crew.filter(c => c.state === 'working' && c.roomId === r.id).length;
-    if (n < bestN) { bestN = n; best = r; }
+// each producing module's output resource, and how life-critical it is
+const ROOM_OUTPUT = { reactor: 'power', lifesupport: 'oxygen', extractor: 'minerals', hydroponics: 'food' };
+const JOB_WEIGHT = { lifesupport: 4, reactor: 3, hydroponics: 2, extractor: 1 };
+
+// How badly room `r` needs an operator right now, from crew c's point of view.
+// 0 = not needed. Higher = more urgent. Hysteresis (via `here`) keeps the current
+// operator working until the store is full, while others only join when it dips.
+function jobNeed(c, r) {
+  if (!ROOM_OUTPUT[r.type]) return 0;
+  const here = c.roomId === r.id;
+  if (r.type === 'lifesupport') {
+    if (!hasPower(GAME)) return 0;                       // can't run life support unpowered
+    const o2F = GAME.resources.oxygen / cap(GAME, 'oxygen');
+    const co2F = GAME.resources.co2 / cap(GAME, 'co2');
+    const o2Need = here ? o2F < 0.999 : o2F < 0.9;
+    const co2Need = here ? co2F > 0.1 : co2F >= 0.45;
+    if (!o2Need && !co2Need) return 0;
+    return JOB_WEIGHT.lifesupport * Math.max(1 - o2F, co2F);
+  }
+  const frac = GAME.resources[ROOM_OUTPUT[r.type]] / cap(GAME, ROOM_OUTPUT[r.type]);
+  if (frac >= (here ? 0.999 : 0.92)) return 0;           // full enough — not needed
+  return (JOB_WEIGHT[r.type] || 1) * (1 - frac);
+}
+
+// Role-less, demand-driven: a crew operates whichever module most needs a body.
+// Dividing by crew already assigned spreads them out; null = nothing to do -> idle.
+function pickWorkRoom(c) {
+  let best = null, bestScore = 0;
+  GAME.rooms.forEach(r => {
+    const need = jobNeed(c, r);
+    if (need <= 0) return;
+    const score = need / (assignedOn(r.id) + 1);
+    if (score > bestScore) { bestScore = score; best = r; }
   });
   return best;
-}
-// a producer module is "locked" (needs no operator) when its output resource is full
-const ROOM_OUTPUT = { reactor: 'power', lifesupport: 'oxygen', extractor: 'minerals', hydroponics: 'food' };
-function roomLocked(r) {
-  const res = ROOM_OUTPUT[r.type];
-  return res ? GAME.resources[res] >= cap(GAME, res) * 0.999 : false;
-}
-// crew are demand-driven: they operate a module only while its output is needed,
-// and leave (idle) once it's full. Returns the room to work, or null to idle.
-function pickWorkRoom(c) {
-  // LIFE-OR-DEATH: if air is failing and nobody is on Life Support, ANY crew covers it
-  // (so a sleeping/dead/busy engineer can't doom the ship).
-  const lsRooms = roomsOfType('lifesupport');
-  if (lsRooms[0] && assignedOn(lsRooms[0].id) <= 0) {
-    const o2F = GAME.resources.oxygen / cap(GAME, 'oxygen');
-    const co2F = GAME.resources.co2 / cap(GAME, 'co2');
-    if ((o2F < 0.5 || co2F >= 0.6) && hasPower(GAME)) return leastStaffed(lsRooms);
-  }
-  // ...and the Reactor if power is failing and nobody is on it
-  const rxRooms = roomsOfType('reactor');
-  if (rxRooms[0] && assignedOn(rxRooms[0].id) <= 0 && GAME.resources.power < cap(GAME, 'power') * 0.55) {
-    return leastStaffed(rxRooms);
-  }
-  if (c.role === 'engineer') {
-    const ls = roomsOfType('lifesupport'), reactor = roomsOfType('reactor');
-    const powerF = GAME.resources.power / cap(GAME, 'power');
-    const o2F = GAME.resources.oxygen / cap(GAME, 'oxygen');
-    const co2F = GAME.resources.co2 / cap(GAME, 'co2');
-    const inLS = c.roomId && ls.some(r => r.id === c.roomId);
-    const inReactor = c.roomId && reactor.some(r => r.id === c.roomId);
-    // hysteresis so the engineer doesn't flap between rooms
-    const lsDemand = inLS ? (o2F < 0.97 || co2F > 0.12) : (o2F < 0.70 || co2F >= 0.45);
-    const powerDemand = inReactor ? (powerF < 0.99) : (powerF < 0.60);
-    if (o2F < 0.35 && ls.length) return leastStaffed(ls);        // air emergency
-    if (powerF < 0.12 && reactor.length) return leastStaffed(reactor); // power emergency
-    if (lsDemand && ls.length) return leastStaffed(ls);          // air/CO₂ before topping power
-    if (powerDemand && reactor.length) return leastStaffed(reactor);
-    return null;                                                 // everything's fine -> idle
-  }
-  // miners / botanists: operate their module while its output isn't full.
-  // Hysteresis: start when the store dips below 92%, keep going until it's full.
-  let rooms = [];
-  ROLES[c.role].staffs.forEach(t => roomsOfType(t).forEach(r => {
-    const res = ROOM_OUTPUT[r.type];
-    const frac = res ? GAME.resources[res] / cap(GAME, res) : 0;
-    const here = c.roomId === r.id;
-    if (here ? frac < 0.999 : frac < 0.92) rooms.push(r);
-  }));
-  return rooms.length ? leastStaffed(rooms) : null;
 }
 
 /* ----------------------------------------------------------
@@ -516,13 +517,18 @@ function step(dt) {
     n.morale = clamp(n.morale, 0, 100);
     n.health = clamp(n.health, 0, maxH);
 
-    // skill XP while working
-    if (c.state === 'working' && c.roomId) {
-      c.xp += CONFIG.skill.xpPerSecondWorking * dt;
-      const need = CONFIG.skill.xpToLevel * c.skillLevel;
-      if (c.skillLevel < CONFIG.skill.maxLevel && c.xp >= need) {
-        c.xp -= need; c.skillLevel++;
-        logMsg(`${c.name} reached ${ROLES[c.role].skill} level ${c.skillLevel}.`, 'good');
+    // skill XP while working — the crew improves the skill the job uses
+    if (c.state === 'working' && c.roomId && c.atStation) {
+      const room = GAME.rooms.find(r => r.id === c.roomId);
+      const sk = room && ROOM_SKILL[room.type];
+      if (sk) {
+        const s = c.skills[sk];
+        s.xp += CONFIG.skill.xpPerSecondWorking * dt;
+        const need = CONFIG.skill.xpToLevel * s.level;
+        if (s.level < CONFIG.skill.maxLevel && s.xp >= need) {
+          s.xp -= need; s.level++;
+          logMsg(`${c.name} reached ${SKILLS[sk].name} level ${s.level}.`, 'good');
+        }
       }
     }
 
@@ -537,14 +543,16 @@ function step(dt) {
   if (aliveCrew().length === 0 && !GAME.gameOver) endRun();
 }
 
-// morale affects work output a touch — fold into staffOn
-// effective operators ON a module — only crew physically present produce/consume
+// effective operators ON a module — only crew physically present produce/consume.
+// Output scales with the operator's relevant skill and their morale.
 function staffOn(roomId) {
+  const room = GAME.rooms.find(r => r.id === roomId);
+  if (!room) return 0;
   let s = 0;
   aliveCrew().forEach(c => {
     if (c.state === 'working' && c.roomId === roomId && c.atStation) {
       const moraleMult = 0.6 + c.needs.morale / 250; // 0.6 .. 1.0
-      s += skillMult(c) * moraleMult;
+      s += roomSkillMult(c, room) * moraleMult;
     }
   });
   return s;

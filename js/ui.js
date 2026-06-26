@@ -69,24 +69,16 @@ function renderTop() {
 
 /* ---------------- ship grid ---------------- */
 function staffCountText(room) {
-  const def = ROOM_DEFS[room.type];
   if (room.type === 'lifesupport') {
     if (!hasPower(GAME)) return 'no power';
     return staffOn(room.id) > 0 ? 'making O₂ · scrubbing CO₂' : 'idle — no operator';
   }
-  if (def.auto && room.type !== 'reactor') {
-    if (room.type === 'medbay') return hasPower(GAME) ? 'online' : 'no power';
-    if (room.type === 'quarters') {
-      const sleeping = aliveCrew().filter(c => c.state === 'sleeping').length;
-      return `${sleeping} resting`;
-    }
-  }
-  const role = def.staffRole;
-  if (!role && room.type !== 'reactor') return '';
+  if (room.type === 'medbay') return hasPower(GAME) ? 'online' : 'no power';
+  if (room.type === 'quarters') return `${aliveCrew().filter(c => c.state === 'sleeping').length} resting`;
+  if (room.type === 'messhall') return `${aliveCrew().filter(c => c.state === 'eating').length} eating`;
+  if (room.type === 'engine') return 'standby';
   const present = aliveCrew().filter(c => c.state === 'working' && c.roomId === room.id && c.atStation);
-  if (room.type === 'reactor') {
-    return present.length ? `${present.length} operating` : 'automated (low output)';
-  }
+  if (room.type === 'reactor') return present.length ? `${present.length} operating` : 'automated (low output)';
   return present.length ? `${present.length} working` : 'idle';
 }
 
@@ -140,19 +132,20 @@ function renderCrew() {
   $('#crew-count').textContent = `${aliveCrew().length} alive`;
   const list = $('#crew-list');
   list.innerHTML = GAME.crew.map(c => {
-    const role = ROLES[c.role];
     const dead = c.state === 'dead';
     const maxH = crewMaxHealth();
-    return `<div class="crew ${dead ? 'dead' : ''}" style="--role:${role.color}">
+    // skill chips: highlight the crew's strongest skill
+    const top = SKILL_KEYS.reduce((a, k) => crewSkillLevel(c, k) > crewSkillLevel(c, a) ? k : a, SKILL_KEYS[0]);
+    const skillChips = SKILL_KEYS.map(k =>
+      `<span class="sk ${k === top ? 'top' : ''}" style="--sk:${SKILLS[k].color}" title="${SKILLS[k].name}">${SKILLS[k].name.slice(0, 3)} ${crewSkillLevel(c, k)}</span>`
+    ).join('');
+    return `<div class="crew ${dead ? 'dead' : ''}" style="--role:${c.color}">
       <div class="crew-top">
-        <div>
-          <span class="crew-name">${c.name}</span>
-          <span class="crew-role">· ${role.name}</span>
-          <span class="crew-skill">${role.skill} L${c.skillLevel}</span>
-        </div>
+        <div><span class="crew-name">${c.name}</span></div>
         <span class="crew-state ${c.state}">${dead ? '☠ dead' : c.state}</span>
       </div>
-      ${dead ? '' : `<div class="needs">
+      ${dead ? '' : `<div class="crew-skills">${skillChips}</div>
+      <div class="needs">
         ${needRow('Food', 'hunger', c.needs.hunger)}
         ${needRow('Rest', 'energy', c.needs.energy)}
         ${needRow('Health', 'health', c.needs.health, maxH)}
