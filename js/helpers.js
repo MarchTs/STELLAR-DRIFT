@@ -20,7 +20,7 @@ function roomPowerDraw(room) {
   if (['extractor', 'hydroponics', 'lifesupport'].includes(room.type) && staffOn(room.id) <= 0) return 0;
   let cost = def.powerCost * primaryMult(room);
   if (attrDef(room.type, 'efficiency')) cost *= attrEff(room, 'efficiency');
-  return cost;
+  return cost * condMod('powerDrawMult', 1);   // hot sectors make everything draw more
 }
 function totalBeds() { return roomsOfType('quarters').reduce((s, r) => s + bedCount(r), 0); }
 function totalMedBeds() { return roomsOfType('medbay').reduce((s, r) => s + bedCount(r), 0); }

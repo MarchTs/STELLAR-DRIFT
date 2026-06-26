@@ -79,6 +79,7 @@ function loadGame() {
       if (!GAME.stock) GAME.stock = rollSectorStock(GAME.sector || 1);
     }
     if (GAME && !GAME.hullTier) GAME.hullTier = 1;
+    if (GAME && !GAME.condition) GAME.condition = 'calm';
     return !!GAME && !GAME.gameOver;
   } catch (e) { return false; }
 }

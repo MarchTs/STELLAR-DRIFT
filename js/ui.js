@@ -58,7 +58,7 @@ function resourceBreakdown(res) {
 
   if (res === 'power') {
     roomsOfType('reactor').forEach((r, i, a) =>
-      add(sources, 'Reactor' + tag(a, i), (RM.reactor.powerPassive + RM.reactor.powerPerStaff * staffOn(r.id)) * attrMult(r, 'output') * reactorMultiplier()));
+      add(sources, 'Reactor' + tag(a, i), (RM.reactor.powerPassive + RM.reactor.powerPerStaff * staffOn(r.id)) * attrMult(r, 'output') * reactorMultiplier() * condMod('reactorMult', 1)));
     ['lifesupport', 'extractor', 'hydroponics', 'quarters', 'medbay'].forEach(t =>
       roomsOfType(t).forEach((r, i, a) => add(sinks, ROOM_DEFS[t].name + tag(a, i), roomPowerDraw(r))));
   } else if (res === 'oxygen') {
@@ -253,11 +253,40 @@ function renderControls() {
   const si = $('#sector-info');
   if (si && GAME.stock) {
     const low = GAME.stock.minerals < 30 && GAME.stock.ice < 30;
+    const c = condDef();
     si.innerHTML = `<span class="si-sector">Sector ${GAME.sector}</span>
+      <span class="si-cond cond-${c.tone}" title="${c.desc}">${c.icon} ${c.name}</span>
       <span class="si-stock"><b style="color:var(--minerals)">${fmt(GAME.stock.minerals)}</b> ore</span>
       <span class="si-stock"><b style="color:var(--ice)">${fmt(GAME.stock.ice)}</b> ice</span>
-      <span class="muted">${low ? 'depleted — jump out' : 'in sector'}</span>`;
+      <span class="muted">${low ? 'depleted' : ''}</span>`;
   }
+}
+
+/* ---------------- jump: choose the next sector ---------------- */
+let jumpOptions = null;
+function openJumpModal() {
+  if (!canJump()) return;
+  jumpOptions = generateJumpOptions();
+  const cost = jumpFuelCost();
+  const cards = jumpOptions.map((o, i) => {
+    const c = CONDITIONS[o.condition];
+    return `<div class="upg">
+      <div class="u-top"><span class="u-name">${c.icon} ${c.name}</span><span class="u-cat">Sector ${o.sector}</span></div>
+      <div class="u-desc cond-${c.tone}">${c.desc}</div>
+      <div class="u-blurb">Stock: <b style="color:var(--minerals)">${fmt(o.stock.minerals)}</b> ore · <b style="color:var(--ice)">${fmt(o.stock.ice)}</b> ice</div>
+      <div class="u-foot"><span class="u-cost" style="color:var(--fuel)">${cost} fuel</span>
+        <button class="btn small primary" onclick="confirmJump(${i})">Jump here</button></div>
+    </div>`;
+  }).join('');
+  openModal(`<span class="close" onclick="closeModal()">×</span>
+    <h2>Plot a Jump</h2>
+    <p class="muted">Scanners found ${jumpOptions.length} reachable sectors. Each jump costs <b style="color:var(--fuel)">${cost} fuel</b> (you have ${fmt(GAME.resources.fuel)}). Deeper space is more hostile.</p>
+    <div class="upg-grid">${cards}</div>
+    <div class="row-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>`);
+}
+function confirmJump(i) {
+  const opt = jumpOptions && jumpOptions[i];
+  if (opt && doJumpTo(opt)) { triggerJumpFlash(); closeModal(); renderAll(); }
 }
 
 function renderAll() {

@@ -35,6 +35,7 @@ function newRun() {
     gameOver: false,
     paused: false,
     hullTier: 1,
+    condition: 'calm',
     stock: rollSectorStock(1),
   };
   GAME.resources.minerals += metaLevel('start_minerals') * 25;
@@ -61,7 +62,7 @@ function step(dt) {
   roomsOfType('reactor').forEach(r => {
     const staff = staffOn(r.id);
     powerProd += (CONFIG.rooms.reactor.powerPassive
-      + CONFIG.rooms.reactor.powerPerStaff * staff) * attrMult(r, 'output') * reactorMultiplier();
+      + CONFIG.rooms.reactor.powerPerStaff * staff) * attrMult(r, 'output') * reactorMultiplier() * condMod('reactorMult', 1);
   });
   // consumers: production rooms only draw power when actually staffed/working;
   // draw scales UP with the module's primary upgrade level (better = hungrier),
@@ -84,7 +85,7 @@ function step(dt) {
     roomsOfType('lifesupport').forEach(r => {
       if (staffOn(r.id) <= 0) return;                          // needs an engineer to do anything
       const m = attrMult(r, 'output');
-      const melt = Math.min(LS.iceMelt * attrMult(r, 'water') * dt, R.ice);   // melt ice into water
+      const melt = Math.min(LS.iceMelt * attrMult(r, 'water') * condMod('meltMult', 1) * dt, R.ice);   // melt ice into water
       R.ice -= melt; R.water += melt;
       const wantW = LS.waterCost * m * dt;                     // oxygen output gated by water
       const useW = Math.min(wantW, R.water);
@@ -170,6 +171,7 @@ function step(dt) {
     if (n.energy <= 0) n.health -= N.exhaustDmg * dt;
     if (o2Low) n.health -= N.suffocateDmg * dt;
     if (co2Bad) n.health -= N.co2Dmg * dt;
+    n.health -= condMod('crewDmg', 0) * dt;   // e.g. irradiated sectors
 
     // morale: recovers when fed+rested, decays otherwise
     const needsOk = n.hunger > 40 && n.energy > 40 && !o2Low;
@@ -238,13 +240,40 @@ function synthFuel() {
 }
 
 function canJump() { return GAME && !GAME.gameOver && GAME.resources.fuel >= jumpFuelCost(); }
-function doJump() {
-  if (!canJump()) return false;
+
+// current sector's environmental condition
+function condDef() { return CONDITIONS[(GAME && GAME.condition) || 'calm'] || CONDITIONS.calm; }
+function condMod(key, dflt) { const v = condDef()[key]; return v === undefined ? dflt : v; }
+
+// roll a candidate sector (stock + condition); deeper sectors are more hazardous
+function rollCondition(depth) {
+  const badChance = Math.min(0.85, 0.15 + depth * 0.09);
+  if (rngFloat() > badChance) return rngFloat() < 0.45 ? 'rich' : 'calm';
+  return BAD_CONDITIONS[Math.floor(rngFloat() * BAD_CONDITIONS.length)];
+}
+function rollSector(depth) {
+  const condition = rollCondition(depth);
+  const mult = CONDITIONS[condition].stockMult || 1;
+  const stock = rollSectorStock(depth);
+  stock.minerals = Math.round(stock.minerals * mult);
+  stock.ice = Math.round(stock.ice * mult);
+  return { sector: depth, condition, stock };
+}
+function generateJumpOptions() {
+  const depth = GAME.sector + 1;
+  return [rollSector(depth), rollSector(depth), rollSector(depth)];
+}
+
+// jump to a chosen candidate sector
+function doJumpTo(opt) {
+  if (!canJump() || !opt) return false;
   GAME.resources.fuel -= jumpFuelCost();
-  GAME.sector++;
-  GAME.stock = rollSectorStock(GAME.sector);   // fresh, finite resources in the new sector
+  GAME.sector = opt.sector;
+  GAME.stock = opt.stock;
+  GAME.condition = opt.condition;
   GAME.nextEventIn = Math.min(GAME.nextEventIn, 12);
-  logMsg(`Jumped to Sector ${GAME.sector}. Fresh ore fields, deadlier space.`, 'warn');
+  const c = CONDITIONS[opt.condition];
+  logMsg(`Jumped to Sector ${opt.sector} — ${c.name}. ${c.desc}`, c.tone === 'good' ? 'good' : 'warn');
   saveGame();
   return true;
 }

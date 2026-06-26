@@ -287,3 +287,18 @@ const EVENT_DEFS = [
     desc: 'A welcome haul of fuel, ice and minerals.',
   },
 ];
+
+// ------------------------------------------------------------
+// Sector environmental conditions — applied while in that sector.
+// Modifiers: reactorMult (reactor output), powerDrawMult (all module draw),
+// meltMult (ice->water rate), crewDmg (health lost/sec), stockMult (resource stock).
+// ------------------------------------------------------------
+const CONDITIONS = {
+  calm:       { name: 'Calm Space',  icon: '·', tone: 'good', desc: 'Quiet space. Nothing unusual.' },
+  rich:       { name: 'Ore-Rich',    icon: '◆', tone: 'good', stockMult: 1.7, desc: 'Dense ore & ice fields — a far bigger haul to mine.' },
+  scorching:  { name: 'Scorching',   icon: '🔥', tone: 'bad',  powerDrawMult: 1.6, desc: 'Stellar heat — modules run hot and draw +60% power.' },
+  frozen:     { name: 'Frozen',      icon: '❄', tone: 'bad',  meltMult: 0.25, desc: 'Deep cold — ice barely melts (water reclaim −75%).' },
+  irradiated: { name: 'Irradiated',  icon: '☢', tone: 'bad',  crewDmg: 0.3,   desc: 'Hard radiation slowly wounds the crew.' },
+  nebula:     { name: 'Ion Nebula',  icon: '≈', tone: 'bad',  reactorMult: 0.65, desc: 'Ion interference cuts reactor output −35%.' },
+};
+const BAD_CONDITIONS = ['scorching', 'frozen', 'irradiated', 'nebula'];
