@@ -41,24 +41,24 @@ function updateCrewState(c) {
   const canHeal = medbay && hasPower(GAME);
   const bedForHeal = c.state === 'healing' || countState('healing') < totalMedBeds();
   if (n.health < CONFIG.ai.healThreshold && canHeal && bedForHeal) { setState(c, 'healing'); return; }
-  // 1b. EMERGENCY: an engineer drops everything to run to an active hazard and repair it
+  // 1b. EMERGENCY: drop everything to run to an active hazard and repair it
   if (n.health > 12) {
     const job = claimRepairJob(c);
     if (job) { c.state = 'repairing'; c.roomId = null; return; }
   }
-  // 2. sleep if exhausted and a berth is free
-  const bedForSleep = c.state === 'sleeping' || countState('sleeping') < totalBeds();
-  if (n.energy < c.restThreshold && bedForSleep) { setState(c, 'sleeping'); return; }
-  // 3. eat if hungry and food available (Mess Hall seats are limited; Hydroponics grazing isn't)
-  const seatFree = roomsOfType('messhall').length === 0 || c.state === 'eating' || countState('eating') < totalSeats();
-  if (n.hunger < c.eatThreshold && GAME.resources.food > 1 && seatFree) { setState(c, 'eating'); return; }
-
-  // if currently mid need-task and not yet at finish threshold, keep going
+  // 2. FINISH the current rest/meal before starting anything else, so a sleeper
+  //    isn't yanked out to eat (and vice-versa) — that caused bed<->galley shuttling.
   if (c.state === 'sleeping' && n.energy < CONFIG.ai.wakeAt) return;
   if (c.state === 'eating' && n.hunger < CONFIG.ai.fullAt && GAME.resources.food > 1) return;
   if (c.state === 'healing' && n.health < CONFIG.ai.healedAt / 100 * maxH && canHeal) return;
+  // 3. sleep if exhausted and a berth is free
+  const bedForSleep = c.state === 'sleeping' || countState('sleeping') < totalBeds();
+  if (n.energy < c.restThreshold && bedForSleep) { setState(c, 'sleeping'); return; }
+  // 4. eat if hungry and food available (Mess Hall seats are limited; Hydroponics grazing isn't)
+  const seatFree = roomsOfType('messhall').length === 0 || c.state === 'eating' || countState('eating') < totalSeats();
+  if (n.hunger < c.eatThreshold && GAME.resources.food > 1 && seatFree) { setState(c, 'eating'); return; }
 
-  // 4. otherwise operate a module that needs them — or idle if nothing does
+  // 5. otherwise operate a module that needs them — or idle if nothing does
   const room = pickWorkRoom(c);
   if (room) { c.state = 'working'; c.roomId = room.id; }
   else { c.state = 'idle'; c.roomId = null; }
