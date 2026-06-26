@@ -92,26 +92,42 @@ function staffCountText(room) {
 }
 
 function renderShip() {
-  // The ship itself is drawn on the canvas by ship.js (drawShip()).
-  // Here we only render the build tray below it.
+  // The ship is drawn on the canvas by ship.js. Building is done by clicking an
+  // empty bay on the ship; here we just show a hint line.
   const tray = $('#build-tray');
   if (!tray) return;
+  tray.innerHTML = shipFull()
+    ? `<div class="tray-msg">All ${MAX_ROOMS} bays occupied — demolish a module to free a slot.</div>`
+    : `<div class="tray-msg">▦ Click an empty bay on the ship to build a module.</div>`;
+}
+
+/* build menu for a specific empty bay */
+function openBuildModal(bay) {
   const types = buildableTypes();
-  if (types.length === 0) {
-    tray.innerHTML = `<div class="tray-msg">All ${MAX_ROOMS} bays occupied — upgrade existing rooms instead.</div>`;
-    return;
-  }
-  tray.innerHTML = types.map(type => {
+  const cards = types.map(type => {
     const cost = buildCost(type);
-    const ok = canBuild(type);
-    return `<div class="build-chip ${ok ? '' : 'disabled'}" data-build="${type}" title="${ROOM_DEFS[type].desc}">
-      <span class="bc-name">+ ${ROOM_DEFS[type].name}</span>
-      <span class="bc-hint">${roomEffectText(type)}</span>
-      <span class="bc-cost">${cost} minerals</span>
+    const afford = GAME.resources.minerals >= cost;
+    const def = ROOM_DEFS[type];
+    return `<div class="upg">
+      <div class="u-top"><span class="u-name">${def.icon} ${def.name}</span></div>
+      <div class="u-desc">${roomEffectText(type)}</div>
+      <div class="u-blurb">${def.desc}</div>
+      <div class="u-foot">
+        <span class="u-cost">${cost} minerals</span>
+        <button class="btn small ${afford ? 'primary' : ''}" ${afford ? '' : 'disabled'} onclick="doBuildInBay('${type}',${bay})">Build</button>
+      </div>
     </div>`;
   }).join('');
-  tray.querySelectorAll('.build-chip').forEach(c =>
-    c.onclick = () => { if (buildRoom(c.dataset.build)) renderAll(); });
+  openModal(`
+    <span class="close" onclick="closeModal()">×</span>
+    <h2>Build a Module</h2>
+    <p class="muted">Bay ${bay + 1} is empty. Costs minerals. You have <b style="color:var(--minerals)">${fmt(GAME.resources.minerals)}</b> minerals.</p>
+    <div class="upg-grid">${cards}</div>
+    <div class="row-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>
+  `);
+}
+function doBuildInBay(type, bay) {
+  if (buildRoom(type, bay)) { renderAll(); closeModal(); }
 }
 
 /* ---------------- crew ---------------- */
@@ -157,7 +173,7 @@ function renderLog() {
 /* ---------------- buttons state ---------------- */
 function renderControls() {
   $('#btn-jump').disabled = !canJump();
-  $('#btn-jump').textContent = `Jump ⟶ (${CONFIG.jump.fuelCost} fuel)`;
+  $('#btn-jump').textContent = `Jump ⟶ (${jumpFuelCost()} fuel)`;
   const si = $('#sector-info');
   if (si && GAME.stock) {
     const low = GAME.stock.minerals < 30 && GAME.stock.ice < 30;

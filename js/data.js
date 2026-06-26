@@ -70,9 +70,12 @@ const CONFIG = {
   // ---- Build / upgrade costs (minerals) ----
   build: {
     medbay: 45,
-    extractor: 60,      // extra extractor
+    extractor: 60,
     hydroponics: 60,
     quarters: 50,
+    lifesupport: 65,
+    reactor: 80,
+    engine: 70,
     upgradeBase: 30,    // upgrade cost = upgradeBase * level * 1.6
     upgradeMult: 1.6,
   },
@@ -134,6 +137,7 @@ const ROOM_DEFS = {
   hydroponics: { name: 'Hydroponics', icon: '❀', staffRole: 'botanist', auto: false, desc: 'Grows food from water + oxygen when staffed by a botanist. Needs power.' },
   quarters:    { name: 'Quarters',    icon: '⏾', staffRole: null,       auto: true,  desc: 'Beds where tired crew sleep to restore energy.' },
   medbay:      { name: 'Medbay',      icon: '✚', staffRole: null,       auto: true,  desc: 'Injured or sick crew heal here. Needs power.' },
+  engine:      { name: 'Engine',      icon: '🚀', staffRole: null,       auto: true,  desc: 'Stores fuel and drives FTL jumps. Upgrade for a bigger fuel reserve and cheaper jumps.' },
 };
 
 // random crew names
@@ -207,6 +211,12 @@ const ROOM_ATTRS = {
       hint: (l) => `+${_f(CONFIG.needs.healRegen * A_MULT(l))}/s healing` },
     { key: 'beds',      name: 'Med Beds',  kind: 'beds', base: 26, max: 6, baseN: 1,
       hint: (l) => `${A_BEDS(1, l)} med beds` },
+  ],
+  engine: [
+    { key: 'fuelstorage',    name: 'Fuel Reserve',    kind: 'mult', base: 20, max: 8,
+      hint: (l) => `fuel capacity ${_r(CONFIG.baseCaps.fuel * A_MULT(l))}` },
+    { key: 'fuelefficiency', name: 'Fuel Efficiency', kind: 'eff',  base: 26, max: 6,
+      hint: (l) => `jump fuel cost −${_pct(l)}%` },
   ],
 };
 

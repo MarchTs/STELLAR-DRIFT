@@ -12,7 +12,7 @@ function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 let GAME = null;   // run state
 let META = null;   // persistent meta state
 
-const SAVE_KEY = 'stellardrift.save.v3';
+const SAVE_KEY = 'stellardrift.save.v4';
 const META_KEY = 'stellardrift.meta.v1';
 
 /* ----------------------------------------------------------
@@ -94,6 +94,7 @@ const RES_CAP_SRC = {
   water:    { type: 'lifesupport', attr: 'waterstorage' },
   minerals: { type: 'extractor',   attr: 'storage' },
   food:     { type: 'hydroponics', attr: 'storage' },
+  fuel:     { type: 'engine',      attr: 'fuelstorage' },
 };
 function cap(st, res) {
   let c = CONFIG.baseCaps[res];
@@ -123,10 +124,10 @@ function makeCrew(role, skillLvl) {
   };
 }
 
-function makeRoom(type) {
+function makeRoom(type, bay) {
   const attrs = {};
   (ROOM_ATTRS[type] || []).forEach(a => { attrs[a.key] = 1; });
-  return { id: 'r' + Math.floor(rngFloat() * 1e9).toString(36), type, attrs };
+  return { id: 'r' + Math.floor(rngFloat() * 1e9).toString(36), type, attrs, bay };
 }
 
 function newRun() {
@@ -141,10 +142,10 @@ function newRun() {
   }
 
   const rooms = [
-    makeRoom('reactor'), makeRoom('lifesupport'), makeRoom('extractor'),
-    makeRoom('hydroponics'), makeRoom('quarters'),
+    makeRoom('reactor', 0), makeRoom('lifesupport', 1), makeRoom('extractor', 2),
+    makeRoom('hydroponics', 3), makeRoom('quarters', 4),
   ];
-  if (metaLevel('prebuilt_medbay')) rooms.push(makeRoom('medbay'));
+  if (metaLevel('prebuilt_medbay')) rooms.push(makeRoom('medbay', 5));
 
   GAME = {
     sector: 1,
@@ -180,14 +181,15 @@ function loadGame() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return false;
     GAME = JSON.parse(raw);
-    // migrate any pre-attribute rooms (single `level`) -> attrs
-    if (GAME && GAME.rooms) GAME.rooms.forEach(r => {
+    // migrate any pre-attribute rooms (single `level`) -> attrs, and assign bay slots
+    if (GAME && GAME.rooms) GAME.rooms.forEach((r, i) => {
       if (!r.attrs) {
         r.attrs = {};
         (ROOM_ATTRS[r.type] || []).forEach(a => { r.attrs[a.key] = 1; });
         if (r.level) r.attrs.output = r.level;
         delete r.level;
       }
+      if (r.bay === undefined) r.bay = i;
     });
     // backfill any resources / sector stock added in later versions
     if (GAME && GAME.resources) {
@@ -429,8 +431,9 @@ function step(dt) {
       const staff = staffOn(r.id);
       if (staff <= 0) return;
       const m = attrMult(r, 'output') * staff * mineMult * dt;
-      const dMin = Math.min(EX.mineralsOut * m, GAME.stock.minerals);
-      const dIce = Math.min(EX.iceOut * m, GAME.stock.ice);
+      // only pull from the sector what we can actually store (don't waste a full hold)
+      const dMin = Math.min(EX.mineralsOut * m, GAME.stock.minerals, cap(GAME, 'minerals') - R.minerals);
+      const dIce = Math.min(EX.iceOut * m, GAME.stock.ice, cap(GAME, 'ice') - R.ice);
       GAME.stock.minerals -= dMin; R.minerals += dMin;
       GAME.stock.ice -= dIce; R.ice += dIce;
       R.co2 += EX.co2Out * attrMult(r, 'output') * dt;   // drilling vents CO₂; more with Yield
@@ -607,10 +610,16 @@ function spawnEvent() {
 /* ----------------------------------------------------------
    Jump to next sector
    ---------------------------------------------------------- */
-function canJump() { return GAME && !GAME.gameOver && GAME.resources.fuel >= CONFIG.jump.fuelCost; }
+// jump fuel cost, reduced by the Engine's Fuel Efficiency attribute
+function jumpFuelCost() {
+  const eng = roomsOfType('engine')[0];
+  const eff = eng ? A_EFF(attrLvl(eng, 'fuelefficiency')) : 1;
+  return Math.round(CONFIG.jump.fuelCost * eff);
+}
+function canJump() { return GAME && !GAME.gameOver && GAME.resources.fuel >= jumpFuelCost(); }
 function doJump() {
   if (!canJump()) return false;
-  GAME.resources.fuel -= CONFIG.jump.fuelCost;
+  GAME.resources.fuel -= jumpFuelCost();
   GAME.sector++;
   GAME.stock = rollSectorStock(GAME.sector);   // fresh, finite resources in the new sector
   GAME.nextEventIn = Math.min(GAME.nextEventIn, 12);
@@ -623,21 +632,24 @@ function doJump() {
    Build / upgrade rooms
    ---------------------------------------------------------- */
 const MAX_ROOMS = 8;   // the ship has 8 bays (see js/ship.js)
+const BUILDABLE = ['extractor', 'hydroponics', 'quarters', 'medbay', 'lifesupport', 'reactor', 'engine'];
+const SINGLE_INSTANCE = { medbay: 1, engine: 1 };   // at most one of these
 function shipFull() { return GAME.rooms.length >= MAX_ROOMS; }
+function bayOccupied(bay) { return GAME.rooms.some(r => r.bay === bay); }
+function firstEmptyBay() { for (let i = 0; i < MAX_ROOMS; i++) if (!bayOccupied(i)) return i; return -1; }
 function buildableTypes() {
-  if (shipFull()) return [];   // no empty bays left — don't offer (or charge for) builds
-  // medbay only if not present (unless you want multiples — keep single)
-  const list = [];
-  if (roomsOfType('medbay').length === 0) list.push('medbay');
-  list.push('extractor', 'hydroponics', 'quarters');
-  return list;
+  return BUILDABLE.filter(t => !(SINGLE_INSTANCE[t] && roomsOfType(t).length >= SINGLE_INSTANCE[t]));
 }
 function buildCost(type) { return CONFIG.build[type] || 50; }
-function canBuild(type) { return !shipFull() && GAME.resources.minerals >= buildCost(type); }
-function buildRoom(type) {
+function canBuild(type) {
+  return !shipFull() && buildableTypes().includes(type) && GAME.resources.minerals >= buildCost(type);
+}
+function buildRoom(type, bay) {
   if (!canBuild(type)) return false;
+  if (bay === undefined || bayOccupied(bay)) bay = firstEmptyBay();
+  if (bay < 0) return false;
   GAME.resources.minerals -= buildCost(type);
-  GAME.rooms.push(makeRoom(type));
+  GAME.rooms.push(makeRoom(type, bay));
   GAME.roomsBuilt++;
   logMsg(`Built a new ${ROOM_DEFS[type].name}.`, 'good');
   saveGame();

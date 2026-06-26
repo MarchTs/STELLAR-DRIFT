@@ -39,9 +39,10 @@ function bedTiles(b, n) {
   return out.length ? out : [{ x: b.x0, y: b.bedRow }];
 }
 function roomAndBay(type) {
-  const idx = GAME.rooms.findIndex(r => r.type === type);
-  return (idx >= 0 && idx < 8) ? { room: GAME.rooms[idx], bay: bayRect(idx) } : null;
+  const room = GAME.rooms.find(r => r.type === type);
+  return room ? { room, bay: bayRect(room.bay) } : null;
 }
+function roomInBay(i) { return GAME.rooms.find(r => r.bay === i); }
 function standTiles(b) {
   const out = [];
   for (let x = b.x0; x <= b.x1; x++) if (WALK[b.cy][x]) out.push({ x, y: b.cy });
@@ -103,12 +104,12 @@ function astar(start, goal) {
 const PAWNS = {};
 
 function bayForRoomId(id) {
-  const idx = GAME.rooms.findIndex(r => r.id === id);
-  return (idx >= 0 && idx < 8) ? bayRect(idx) : null;
+  const r = GAME.rooms.find(x => x.id === id);
+  return r ? bayRect(r.bay) : null;
 }
 function bayOfType(type) {
-  const idx = GAME.rooms.findIndex(r => r.type === type);
-  return (idx >= 0 && idx < 8) ? bayRect(idx) : null;
+  const r = GAME.rooms.find(x => x.type === type);
+  return r ? bayRect(r.bay) : null;
 }
 
 function updateShip(dt) {
@@ -221,11 +222,11 @@ function assignHazardTile(ev) {
 /* ---------------- colors ---------------- */
 const ROOM_FLOOR = {
   reactor: '#33282f', lifesupport: '#1c2b35', extractor: '#322f1f',
-  hydroponics: '#203121', quarters: '#272234', medbay: '#311f26',
+  hydroponics: '#203121', quarters: '#272234', medbay: '#311f26', engine: '#2a2620',
 };
 const ROOM_ACCENT = {
   reactor: '#ffd25c', lifesupport: '#6fd3ff', extractor: '#c8a4ff',
-  hydroponics: '#9ad36f', quarters: '#9aa6c8', medbay: '#ff6b6b',
+  hydroponics: '#9ad36f', quarters: '#9aa6c8', medbay: '#ff6b6b', engine: '#ff9d5c',
 };
 const STATE_BADGE = { sleeping: 'z', eating: '◦', healing: '✚', repairing: '🔧' };
 
@@ -272,9 +273,9 @@ function drawShip() {
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (WALK[y][x]) tileFill(ctx, x, y, '#141b29');
 
   // room floors
-  GAME.rooms.forEach((r, idx) => {
-    if (idx >= 8) return;
-    const b = bayRect(idx), col = ROOM_FLOOR[r.type] || '#1a2233';
+  GAME.rooms.forEach(r => {
+    if (r.bay >= 8) return;
+    const b = bayRect(r.bay), col = ROOM_FLOOR[r.type] || '#1a2233';
     for (let y = b.y0; y <= b.y1; y++) for (let x = b.x0; x <= b.x1; x++) if (WALK[y][x]) tileFill(ctx, x, y, col);
   });
 
@@ -295,17 +296,32 @@ function drawShip() {
     ctx.fillStyle = '#1a2840'; ctx.fillRect(cx + 3, cy + 3, TILE - 6, TILE - 6);
   });
 
-  // hover highlight
-  if (hoverBay >= 0 && hoverBay < GAME.rooms.length) {
+  // empty bays: a dashed "build here" slot
+  for (let i = 0; i < 8; i++) {
+    if (roomInBay(i)) continue;
+    const b = bayRect(i);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(120,150,190,.3)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.strokeRect(b.x0 * TILE + 3, b.y0 * TILE + 3, (b.x1 - b.x0 + 1) * TILE - 6, (b.y1 - b.y0 + 1) * TILE - 6);
+    ctx.restore();
+    const s = tileCenter(b.station.x, b.station.y);
+    ctx.fillStyle = 'rgba(150,170,200,.5)'; ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('+', s.x, s.y);
+    ctx.fillStyle = 'rgba(150,170,200,.4)'; ctx.font = '8px sans-serif'; ctx.textBaseline = 'top';
+    ctx.fillText('BUILD', (b.x0 + (b.x1 - b.x0 + 1) / 2) * TILE, b.y0 * TILE + 2);
+  }
+
+  // hover highlight (occupied or empty bay)
+  if (hoverBay >= 0 && hoverBay < 8) {
     const b = bayRect(hoverBay);
     ctx.strokeStyle = 'rgba(92,200,255,.7)'; ctx.lineWidth = 2;
     ctx.strokeRect(b.x0 * TILE + 1, b.y0 * TILE + 1, (b.x1 - b.x0 + 1) * TILE - 2, (b.y1 - b.y0 + 1) * TILE - 2);
   }
 
   // stations, beds & labels
-  GAME.rooms.forEach((r, idx) => {
-    if (idx >= 8) return;
-    const b = bayRect(idx), def = ROOM_DEFS[r.type], ac = ROOM_ACCENT[r.type] || '#5cc8ff';
+  GAME.rooms.forEach(r => {
+    if (r.bay >= 8) return;
+    const b = bayRect(r.bay), def = ROOM_DEFS[r.type], ac = ROOM_ACCENT[r.type] || '#5cc8ff';
 
     // beds for quarters / medbay (count scales with the Beds attribute)
     if (r.type === 'quarters' || r.type === 'medbay') {
@@ -326,7 +342,7 @@ function drawShip() {
     // label across the top of the bay
     ctx.fillStyle = 'rgba(205,217,238,.85)'; ctx.font = '8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     const lx = (b.x0 + (b.x1 - b.x0 + 1) / 2) * TILE;
-    ctx.fillText(def.name.toUpperCase() + (r.level > 1 ? ' L' + r.level : ''), lx, b.y0 * TILE + 2);
+    ctx.fillText(def.name.toUpperCase(), lx, b.y0 * TILE + 2);
   });
 
   // located hazards (breach / fire) with a pulse + repair progress ring
@@ -387,7 +403,7 @@ function drawPawn(ctx, p) {
 
 /* ---------------- interaction ---------------- */
 function bayAtTile(tx, ty) {
-  for (let i = 0; i < Math.min(8, GAME.rooms.length); i++) {
+  for (let i = 0; i < 8; i++) {
     const b = bayRect(i);
     if (tx >= b.x0 && tx <= b.x1 && ty >= b.y0 && ty <= b.y1) return i;
   }
@@ -410,7 +426,10 @@ function initShip() {
     const rect = cv.getBoundingClientRect();
     const tx = Math.floor((e.clientX - rect.left) / TILE), ty = Math.floor((e.clientY - rect.top) / TILE);
     const i = bayAtTile(tx, ty);
-    if (i >= 0 && GAME.rooms[i]) openRoomDetail(GAME.rooms[i].id);
+    if (i < 0) return;
+    const room = roomInBay(i);
+    if (room) openRoomDetail(room.id);     // occupied bay -> manage module
+    else openBuildModal(i);                // empty bay -> build menu
   };
   updateShip(0.001);
   drawShip();
