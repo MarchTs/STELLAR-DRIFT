@@ -23,6 +23,8 @@ const RES_CAP_SRC = {
   co2:      { type: 'lifesupport', attr: 'co2storage' },
   water:    { type: 'lifesupport', attr: 'waterstorage' },
   minerals: { type: 'extractor',   attr: 'storage' },
+  ore:      { type: 'extractor',   attr: 'storage' },
+  scrap:    { type: 'extractor',   attr: 'storage' },
   ice:      { type: 'extractor',   attr: 'icestorage' },
   food:     { type: 'hydroponics', attr: 'storage' },
   fuel:     { type: 'engine',      attr: 'fuelstorage' },
@@ -44,7 +46,13 @@ function crewMaxHealth() { return 100; }
    ---------------------------------------------------------- */
 function saveGame() {
   if (!GAME) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(GAME)); } catch (e) {}
+  try {
+    const toSave = JSON.parse(JSON.stringify(GAME));
+    if (GAME.unlockedBlueprints instanceof Set) {
+      toSave.unlockedBlueprints = Array.from(GAME.unlockedBlueprints);
+    }
+    localStorage.setItem(SAVE_KEY, JSON.stringify(toSave));
+  } catch (e) {}
 }
 function loadGame() {
   try {
@@ -84,7 +92,11 @@ function loadGame() {
     if (GAME && !GAME.challenge) GAME.challenge = 'standard';
     if (GAME && GAME.sd === undefined) GAME.sd = 0;
     if (GAME && GAME.atStation === undefined) GAME.atStation = false;
-    if (GAME && !GAME.unlockedBlueprints) GAME.unlockedBlueprints = new Set();
+    if (GAME && !GAME.unlockedBlueprints) {
+      GAME.unlockedBlueprints = new Set();
+    } else if (GAME && !(GAME.unlockedBlueprints instanceof Set)) {
+      GAME.unlockedBlueprints = new Set(GAME.unlockedBlueprints);
+    }
     return !!GAME && !GAME.gameOver;
   } catch (e) { return false; }
 }

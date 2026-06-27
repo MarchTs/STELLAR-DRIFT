@@ -8,12 +8,12 @@ const CONFIG = {
   saveEveryMs: 4000,
 
   // ---- Resource caps (base, before upgrades / room levels) ----
-  // Groups: Power | Life Support (oxygen, co2) | Storage (food, water, ice, minerals) | fuel
-  baseCaps: { power: 100, oxygen: 100, co2: 100, water: 80, ice: 120, minerals: 200, food: 100, fuel: 50 },
+  // Groups: Power | Life Support (oxygen, co2) | Storage (food, water, ice, minerals, ore, scrap) | fuel
+  baseCaps: { power: 100, oxygen: 100, co2: 100, water: 80, ice: 120, minerals: 200, ore: 150, scrap: 200, food: 100, fuel: 50 },
 
   // ---- Starting run state ----
   start: {
-    resources: { power: 50, oxygen: 85, co2: 5, water: 50, ice: 80, minerals: 35, food: 60, fuel: 40 },
+    resources: { power: 50, oxygen: 85, co2: 5, water: 50, ice: 80, minerals: 35, ore: 0, scrap: 0, food: 60, fuel: 40 },
     crewCount: 3, // one of each base role
   },
 
@@ -57,14 +57,15 @@ const CONFIG = {
     reactor:    { powerPassive: 2.0, powerPerStaff: 6.5, co2Out: 0.5 },   // small automated baseline; an operator does the real work; vents CO₂
     // Life Support: melts ice->water, turns water+power->oxygen, scrubs co2
     lifesupport:{ powerCost: 2.0, o2Out: 4.2, waterCost: 0.35, iceMelt: 0.6, co2Scrub: 2.5 },
-    // Mining Drone: mines minerals AND ice from the sector's finite stock; drilling vents CO₂
-    extractor:  { powerCost: 2.0, mineralsOut: 1.6, iceOut: 0.8, co2Out: 0.45 },
+    // Mining Drone: mines ore AND ice from the sector's finite stock; drilling vents CO₂
+    extractor:  { powerCost: 2.0, oreOut: 1.6, iceOut: 0.8, co2Out: 0.45 },
     // Hydroponics: consumes water + oxygen, produces food
     hydroponics:{ powerCost: 2.0, foodOut: 2.2, waterCost: 0.4, o2Cost: 0.3 },
     quarters:   { powerCost: 0.3, beds: 2 },
     medbay:     { powerCost: 1.5 },
     storage:    { powerCost: 0 },
     fuelsynthesis: { powerCost: 1.2, fuelOut: 0.8, waterCost: 0.8 },
+    manufactor: { powerCost: 1.0, scrapCost: 2.0, oreCost: 1.0, mineralsOut: 1.0 },
   },
 
   // level scaling: output & cap multiply by (1 + (level-1)*levelGain)
@@ -131,6 +132,8 @@ const CONFIG = {
     spawnChance: 0.33,
     resources: {
       minerals: { sell: 2,  buy: 5  },
+      ore:      { sell: 0.3, buy: 1 },
+      scrap:    { sell: 0.3, buy: 1 },
       ice:      { sell: 1,  buy: 3  },
       water:    { sell: 1,  buy: 3  },
       food:     { sell: 3,  buy: 8  },
@@ -146,6 +149,7 @@ const CONFIG = {
   blueprints: {
     storage:        { name: 'Storage Room',      icon: '📦', cost: 200, desc: 'Extra cargo bay. Increases all resource caps.' },
     fuelsynthesis:  { name: 'Fuel Synthesis',    icon: '⚗', cost: 300, desc: 'Automated refinery. Converts water to fuel continuously.' },
+    manufactor:     { name: 'Manufactor',        icon: '⚙', cost: 250, desc: 'Industrial processor. Converts scrap & ore into minerals.' },
   },
 };
 
@@ -176,6 +180,7 @@ const ROOM_DEFS = {
   messhall:    { name: 'Mess Hall',   icon: '🍴', staffRole: null,       auto: true,  desc: 'A proper galley. Crew eat here for a morale boost instead of grazing the Hydroponics bay.' },
   storage:     { name: 'Storage Room', icon: '📦', staffRole: null,      auto: true,  desc: 'Extra cargo bay. Increases all resource storage capacity.' },
   fuelsynthesis: { name: 'Fuel Synthesis', icon: '⚗', staffRole: null,  auto: true,  desc: 'Automated refinery. Converts water into fuel continuously. Needs power.' },
+  manufactor:  { name: 'Manufactor',  icon: '⚙', staffRole: null,       auto: true,  desc: 'Industrial processor. Converts scrap and ore into refined minerals. Needs power.' },
 };
 
 // random crew names
@@ -276,6 +281,10 @@ const ROOM_ATTRS = {
     { key: 'efficiency', name: 'Efficiency',  kind: 'eff',  base: 22, max: 6,
       hint: (l) => `power draw −${_pct(l)}%` },
   ],
+  manufactor: [
+    { key: 'efficiency', name: 'Processing Rate', kind: 'mult', base: 24, max: 10,
+      hint: (l) => `+${_r((A_MULT(l) - 1) * 100)}% conversion speed (base 1.0/tick)` },
+  ],
 };
 
 // ------------------------------------------------------------
@@ -316,15 +325,15 @@ const EVENT_DEFS = [
     desc: 'Lose a chunk of minerals immediately.',
   },
   {
-    id: 'salvage', name: 'Salvage Find', weight: 2, minSector: 1, bad: false,
-    msg: 'You drift past a wreck and salvage fuel and materials.',
+    id: 'salvage', name: 'Wreck Salvage', weight: 2, minSector: 1, bad: false,
+    msg: 'You drift past a wreck and salvage scrap, fuel, and materials.',
     apply: (st, ev) => {
       ev.duration = 1;
-      st.resources.minerals = Math.min(cap(st, 'minerals'), st.resources.minerals + 18 + st.sector * 5);
+      st.resources.scrap = Math.min(cap(st, 'scrap'), st.resources.scrap + 30 + st.sector * 8);
       st.resources.fuel = Math.min(cap(st, 'fuel'), st.resources.fuel + 10 + st.sector * 2);
       st.resources.ice = Math.min(cap(st, 'ice'), st.resources.ice + 20);
     },
-    desc: 'A welcome haul of fuel, ice and minerals.',
+    desc: 'A welcome haul of scrap, fuel and ice from derelict vessels.',
   },
 ];
 

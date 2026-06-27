@@ -17,6 +17,8 @@
   --water: #5aa6ff;
   --ice: #a8e6ff;
   --minerals: #c8a4ff;
+  --ore: #9b8b7e;
+  --scrap: #7a7a7a;
   --food: #9ad36f;
   --fuel: #ff9d5c;
   --core: #ff9ed8;
@@ -67,6 +69,8 @@ body {
 .res.water .bar > i { background: var(--water); }
 .res.ice .bar > i { background: var(--ice); }
 .res.minerals .bar > i { background: var(--minerals); }
+.res.ore .bar > i { background: var(--ore); }
+.res.scrap .bar > i { background: var(--scrap); }
 .res.food .bar > i { background: var(--food); }
 .res.fuel .bar > i { background: var(--fuel); }
 .res.danger .res-val { color: var(--bad); }

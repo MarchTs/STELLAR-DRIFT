@@ -28,6 +28,8 @@ const RES_META = {
   water:    { label: 'Water',    cls: 'water' },
   ice:      { label: 'Ice',      cls: 'ice' },
   minerals: { label: 'Minerals', cls: 'minerals' },
+  ore:      { label: 'Ore',      cls: 'ore' },
+  scrap:    { label: 'Scrap',    cls: 'scrap' },
   food:     { label: 'Food',     cls: 'food' },
   fuel:     { label: 'Fuel',     cls: 'fuel' },
 };
@@ -36,11 +38,11 @@ const RES_META = {
 const RES_GROUPS = [
   { name: 'Power', keys: ['power'] },
   { name: 'Life Support', keys: ['oxygen', 'co2'] },
-  { name: 'Storage', keys: ['food', 'water', 'ice', 'minerals'] },
+  { name: 'Storage', keys: ['food', 'water', 'ice', 'minerals', 'ore', 'scrap'] },
   { name: 'Fuel', keys: ['fuel'] },
 ];
 
-let lastRates = { power: 0, oxygen: 0, co2: 0, water: 0, ice: 0, minerals: 0, food: 0, fuel: 0 };
+let lastRates = { power: 0, oxygen: 0, co2: 0, water: 0, ice: 0, minerals: 0, ore: 0, scrap: 0, food: 0, fuel: 0 };
 let hoveredRes = null;   // which resource meter the mouse is over (for the breakdown tooltip)
 
 /* ---------------- resource flow breakdown (for hover tooltip) ---------------- */
@@ -349,7 +351,7 @@ function confirmJump(i) {
 }
 
 /* ---------------- space station trading modal with tabs ---------------- */
-const STATION_ICONS = { minerals: '◆', ice: '❄', water: '〜', food: '❀', fuel: '⬡' };
+const STATION_ICONS = { minerals: '◆', ore: '◇', scrap: '🔩', ice: '❄', water: '〜', food: '❀', fuel: '⬡' };
 let stationTab = 'resources';
 
 function renderStationTab(tab) {

@@ -111,7 +111,7 @@ function step(dt) {
   const breach = activeEvent('hull_breach');
   if (breach) R.oxygen -= breach.o2Drain * dt;
 
-  // 5. MINING (minerals + ice from finite sector stock) & FOOD (water+O2 -> food)
+  // 5. MINING (ore + ice from finite sector stock) & FOOD (water+O2 -> food)
   if (powered) {
     const mineMult = (1 + (GAME.sector - 1) * CONFIG.jump.mineralBonusPerSector) * condMod('yieldMult', 1);
     roomsOfType('extractor').forEach(r => {
@@ -119,9 +119,9 @@ function step(dt) {
       if (staff <= 0) return;
       const base = staff * mineMult * dt;
       // ore scales with Ore Yield, ice with Ice Yield; only pull what we can store
-      const dMin = Math.min(EX.mineralsOut * attrMult(r, 'output') * base, GAME.stock.minerals, cap(GAME, 'minerals') - R.minerals);
+      const dOre = Math.min(EX.oreOut * attrMult(r, 'output') * base, GAME.stock.minerals, cap(GAME, 'ore') - R.ore);
       const dIce = Math.min(EX.iceOut * attrMult(r, 'iceyield') * base, GAME.stock.ice, cap(GAME, 'ice') - R.ice);
-      GAME.stock.minerals -= dMin; R.minerals += dMin;
+      GAME.stock.minerals -= dOre; R.ore += dOre;
       GAME.stock.ice -= dIce; R.ice += dIce;
       R.co2 += EX.co2Out * attrMult(r, 'output') * dt;   // drilling vents CO₂; more with Yield
     });
@@ -133,6 +133,19 @@ function step(dt) {
       const f = Math.min(wantW > 0 ? R.water / wantW : 1, wantO > 0 ? R.oxygen / wantO : 1, 1);
       R.water -= wantW * f; R.oxygen -= wantO * f;
       R.food += HY.foodOut * m * f * dt;
+    });
+    // Manufactor: converts scrap (2:1) and ore (1:1) into minerals
+    roomsOfType('manufactor').forEach(r => {
+      const MF = CONFIG.rooms.manufactor;
+      const eff = attrMult(r, 'efficiency');
+      // Process ore: 1 ore -> 1 mineral per tick
+      const oreProc = Math.min(R.ore, cap(GAME, 'minerals') - R.minerals) * eff * dt;
+      R.ore -= oreProc;
+      R.minerals += oreProc;
+      // Process scrap: 2 scrap -> 1 mineral per tick
+      const scrapProc = Math.min(Math.floor(R.scrap / 2), cap(GAME, 'minerals') - R.minerals) * eff * dt;
+      R.scrap -= scrapProc * 2;
+      R.minerals += scrapProc;
     });
   }
 
