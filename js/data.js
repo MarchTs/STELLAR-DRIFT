@@ -123,6 +123,20 @@ const CONFIG = {
     perRoomBuilt: 1,
     perPeakCrew: 2,
   },
+
+  // ---- Space Station trading ----
+  station: {
+    spawnChance: 0.33,
+    resources: {
+      minerals: { sell: 2,  buy: 5  },
+      ice:      { sell: 1,  buy: 3  },
+      water:    { sell: 1,  buy: 3  },
+      food:     { sell: 3,  buy: 8  },
+      fuel:     { sell: 6,  buy: 15 },
+    },
+    demandMin: 0.6,
+    demandMax: 1.8,
+  },
 };
 
 // ------------------------------------------------------------

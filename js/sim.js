@@ -39,6 +39,8 @@ function newRun(challengeId) {
     hullTier: 1,
     condition: 'calm',
     stock: rollSectorStock(1),
+    sd: 0,
+    atStation: false,
   };
   clampResources();
   logMsg(`Systems online — ${ch.name}. Keep your crew alive.`, 'good');
@@ -256,16 +258,46 @@ function rollSector(depth) {
 }
 function generateJumpOptions() {
   const depth = GAME.sector + 1;
-  return [rollSector(depth), rollSector(depth), rollSector(depth)];
+  const opts = [rollSector(depth), rollSector(depth), rollSector(depth)];
+  if (rngFloat() < CONFIG.station.spawnChance) {
+    opts[Math.floor(rngFloat() * 3)] = { type: 'station', sector: depth };
+  }
+  return opts;
 }
 
-// jump to a chosen candidate sector
+function generateStationPrices() {
+  const { demandMin, demandMax, resources } = CONFIG.station;
+  const prices = {};
+  for (const res in resources) {
+    const mult = demandMin + rngFloat() * (demandMax - demandMin);
+    prices[res] = {
+      sell: Math.round(resources[res].sell * mult * 10) / 10,
+      buy: resources[res].buy,
+      hot: mult >= 1.2,
+      cold: mult <= 0.75,
+    };
+  }
+  return prices;
+}
+
+// jump to a chosen candidate sector (or station)
 function doJumpTo(opt) {
   if (!canJump() || !opt) return false;
   GAME.resources.fuel -= jumpFuelCost();
+  if (opt.type === 'station') {
+    GAME.sector = opt.sector;
+    GAME.stock = { minerals: 0, ice: 0 };
+    GAME.condition = 'calm';
+    GAME.atStation = true;
+    GAME.nextEventIn = Math.min(GAME.nextEventIn, 12);
+    logMsg(`Docked at Space Station — Sector ${opt.sector}. Trade resources for SD.`, 'good');
+    saveGame();
+    return 'station';
+  }
   GAME.sector = opt.sector;
   GAME.stock = opt.stock;
   GAME.condition = opt.condition;
+  GAME.atStation = false;
   GAME.nextEventIn = Math.min(GAME.nextEventIn, 12);
   const c = CONDITIONS[opt.condition];
   if (c.salvageFuel) GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + c.salvageFuel);

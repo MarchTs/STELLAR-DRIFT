@@ -80,6 +80,7 @@ function init() {
 
   $('#btn-jump').onclick = () => { openJumpModal(); };
   $('#btn-synth').onclick = () => { if (synthFuel()) renderAll(); };
+  $('#btn-trade').onclick = () => { openStationModal(); };
   $('#btn-meta').onclick = () => { openChallengeSelect(false); };
 
   // resource flow breakdown on hover

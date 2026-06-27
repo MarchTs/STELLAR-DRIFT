@@ -271,25 +271,46 @@ function renderControls() {
     synth.textContent = `Synth Fuel (${CONFIG.synth.waterPerFuel} water → ${CONFIG.synth.fuelPerClick})`;
     synth.title = 'Convert water into fuel — inefficient, but reliable';
   }
+  const trade = $('#btn-trade');
+  if (trade) trade.classList.toggle('hidden', !GAME.atStation);
   const si = $('#sector-info');
   if (si && GAME.stock) {
-    const low = GAME.stock.minerals < 30 && GAME.stock.ice < 30;
-    const c = condDef();
-    si.innerHTML = `<span class="si-sector">Sector ${GAME.sector}</span>
-      <span class="si-cond cond-${c.tone}" title="${c.desc}">${c.icon} ${c.name}</span>
-      <span class="si-stock"><b style="color:var(--minerals)">${fmt(GAME.stock.minerals)}</b> ore</span>
-      <span class="si-stock"><b style="color:var(--ice)">${fmt(GAME.stock.ice)}</b> ice</span>
-      <span class="muted">${low ? 'depleted' : ''}</span>`;
+    const sdBadge = GAME.sd > 0 ? `<span class="si-stock" style="color:var(--warn)">◈ ${GAME.sd} SD</span>` : '';
+    if (GAME.atStation) {
+      si.innerHTML = `<span class="si-sector">Sector ${GAME.sector}</span>
+        <span class="si-cond" style="color:var(--warn); border-color:rgba(255,206,92,.3)">◉ Space Station</span>
+        ${sdBadge}`;
+    } else {
+      const low = GAME.stock.minerals < 30 && GAME.stock.ice < 30;
+      const c = condDef();
+      si.innerHTML = `<span class="si-sector">Sector ${GAME.sector}</span>
+        <span class="si-cond cond-${c.tone}" title="${c.desc}">${c.icon} ${c.name}</span>
+        <span class="si-stock"><b style="color:var(--minerals)">${fmt(GAME.stock.minerals)}</b> ore</span>
+        <span class="si-stock"><b style="color:var(--ice)">${fmt(GAME.stock.ice)}</b> ice</span>
+        <span class="muted">${low ? 'depleted' : ''}</span>
+        ${sdBadge}`;
+    }
   }
 }
 
 /* ---------------- jump: choose the next sector ---------------- */
 let jumpOptions = null;
+let stationPrices = null;
+
 function openJumpModal() {
   if (!canJump()) return;
   jumpOptions = generateJumpOptions();
   const cost = jumpFuelCost();
   const cards = jumpOptions.map((o, i) => {
+    if (o.type === 'station') {
+      return `<div class="upg station-card">
+        <div class="u-top"><span class="u-name" style="color:var(--warn)">◉ Space Station</span><span class="u-cat">Sector ${o.sector}</span></div>
+        <div class="u-desc">A neutral trade outpost. Sell surplus resources for SD or restock what you need.</div>
+        <div class="u-blurb">Trades: minerals · ice · water · food · fuel</div>
+        <div class="u-foot"><span class="u-cost" style="color:var(--fuel)">${cost} fuel</span>
+          <button class="btn small primary" onclick="confirmJump(${i})">Dock Here</button></div>
+      </div>`;
+    }
     const c = CONDITIONS[o.condition];
     return `<div class="upg ${c.tone === 'risk' ? 'risk-card' : ''}">
       <div class="u-top"><span class="u-name cond-${c.tone}">${c.icon} ${c.name}</span><span class="u-cat">Sector ${o.sector}</span></div>
@@ -306,9 +327,100 @@ function openJumpModal() {
     <div class="upg-grid">${cards}</div>
     <div class="row-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>`);
 }
+
 function confirmJump(i) {
   const opt = jumpOptions && jumpOptions[i];
-  if (opt && doJumpTo(opt)) { triggerJumpFlash(); closeModal(); renderAll(); }
+  if (!opt) return;
+  const result = doJumpTo(opt);
+  if (result === 'station') {
+    triggerJumpFlash();
+    closeModal();
+    renderAll();
+    stationPrices = generateStationPrices();
+    openStationModal();
+  } else if (result) {
+    triggerJumpFlash();
+    closeModal();
+    renderAll();
+  }
+}
+
+/* ---------------- space station trading modal ---------------- */
+const STATION_ICONS = { minerals: '◆', ice: '❄', water: '〜', food: '❀', fuel: '⬡' };
+
+function openStationModal() {
+  if (!GAME || !stationPrices) return;
+  const rows = Object.keys(CONFIG.station.resources).map(res => {
+    const p = stationPrices[res];
+    const have = Math.floor(GAME.resources[res]);
+    const c = cap(GAME, res);
+    const room = Math.floor(c - GAME.resources[res]);
+    const afford = Math.floor(GAME.sd / p.buy);
+    const demandTag = p.hot
+      ? '<span class="demand-tag hot">▲ hot</span>'
+      : p.cold ? '<span class="demand-tag cold">▼ cold</span>' : '';
+
+    const sellBtn = (qty) => {
+      const n = qty === 'all' ? have : qty;
+      const dis = have < (qty === 'all' ? 1 : qty) ? 'disabled' : '';
+      return `<button class="btn small" ${dis} onclick="tradeStation('sell','${res}','${qty}')">${qty === 'all' ? 'All' : qty}</button>`;
+    };
+    const buyBtn = (qty) => {
+      const n = qty === 'max' ? Math.min(afford, room) : qty;
+      const dis = (GAME.sd < p.buy || room <= 0 || (qty !== 'max' && (GAME.sd < qty * p.buy || room < qty))) ? 'disabled' : '';
+      return `<button class="btn small" ${dis} onclick="tradeStation('buy','${res}','${qty}')">${qty === 'max' ? 'Max' : qty}</button>`;
+    };
+
+    return `<div class="station-row">
+      <div class="sr-meta">
+        <span class="sr-icon" style="color:var(--${res})">${STATION_ICONS[res]}</span>
+        <span class="sr-name">${res[0].toUpperCase() + res.slice(1)}</span>
+        <span class="sr-have muted">${have}/${c}</span>
+      </div>
+      <div class="sr-side">
+        <div class="sr-price">Sell <b style="color:var(--warn)">${p.sell}</b> SD ${demandTag}</div>
+        <div class="sr-btns">${sellBtn(5)} ${sellBtn(25)} ${sellBtn('all')}</div>
+      </div>
+      <div class="sr-side">
+        <div class="sr-price">Buy <b style="color:var(--warn)">${p.buy}</b> SD/unit</div>
+        <div class="sr-btns">${buyBtn(5)} ${buyBtn(25)} ${buyBtn('max')}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  openModal(`<span class="close" onclick="closeModal()">×</span>
+    <h2>◉ Space Station · Sector ${GAME.sector}</h2>
+    <p class="muted">A neutral trade outpost. Prices reset each visit.</p>
+    <div class="station-balance">Balance: <b style="color:var(--warn)">${GAME.sd} SD</b></div>
+    <div class="station-trades">${rows}</div>
+    <div class="row-actions"><button class="btn primary" onclick="closeModal()">✓ Undock</button></div>`);
+}
+
+function tradeStation(dir, res, amount) {
+  if (!stationPrices || !stationPrices[res] || !GAME) return;
+  const p = stationPrices[res];
+  const R = GAME.resources;
+  const c = cap(GAME, res);
+  if (dir === 'sell') {
+    const have = Math.floor(R[res]);
+    const qty = amount === 'all' ? have : Math.min(Number(amount), have);
+    if (qty <= 0) return;
+    R[res] -= qty;
+    const earned = Math.floor(qty * p.sell);
+    GAME.sd += earned;
+    logMsg(`Sold ${qty} ${res} → +${earned} SD.`, 'good');
+  } else {
+    const afford = Math.floor(GAME.sd / p.buy);
+    const room = Math.floor(c - R[res]);
+    const max = Math.min(afford, room);
+    const qty = amount === 'max' ? max : Math.min(Number(amount), max);
+    if (qty <= 0) return;
+    GAME.sd -= qty * p.buy;
+    R[res] = Math.min(c, R[res] + qty);
+    logMsg(`Bought ${qty} ${res} for ${qty * p.buy} SD.`, 'good');
+  }
+  saveGame();
+  openStationModal();
 }
 
 function renderAll() {

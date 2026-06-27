@@ -82,6 +82,8 @@ function loadGame() {
     if (GAME && !GAME.hullTier) GAME.hullTier = 1;
     if (GAME && !GAME.condition) GAME.condition = 'calm';
     if (GAME && !GAME.challenge) GAME.challenge = 'standard';
+    if (GAME && GAME.sd === undefined) GAME.sd = 0;
+    if (GAME && GAME.atStation === undefined) GAME.atStation = false;
     return !!GAME && !GAME.gameOver;
   } catch (e) { return false; }
 }
