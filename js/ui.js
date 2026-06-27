@@ -51,7 +51,7 @@ function resourceBreakdown(res) {
   const sources = [], sinks = [];
   const add = (arr, label, rate) => { if (rate > 0.001) arr.push({ label, rate }); };
   const headcount = aliveCrew().length;
-  const o2Slow = 1 - metaLevel('o2_reserve') * 0.05;
+  const o2Slow = 1;
   const mineMult = 1 + (GAME.sector - 1) * CONFIG.jump.mineralBonusPerSector;
   const eaters = aliveCrew().filter(c => c.state === 'eating' && c.atStation).length;
   const tag = (a, i) => a.length > 1 ? ' #' + (i + 1) : '';
@@ -130,7 +130,8 @@ function resMeter(res) {
 }
 function renderTop() {
   $('#run-sub').textContent = `Sector ${GAME.sector} · ${fmtTime(GAME.time)}`;
-  $('#core-count').textContent = fmt(META.cores);
+  const cl = $('#challenge-label');
+  if (cl) { const ch = challengeDef(); cl.textContent = ch.name; cl.className = `challenge-label cond-${ch.tone}`; cl.title = ch.desc; }
 
   $('#resources').innerHTML = RES_GROUPS.map(g =>
     `<div class="res-group"><div class="res-group-label">${g.name}</div>
@@ -377,53 +378,38 @@ function doRemoveRoom(roomId) {
   if (removeRoom(roomId)) { renderAll(); closeModal(); }
 }
 
-/* meta hub */
-function openMetaHub() {
-  const cats = ['Start', 'Survival'];
-  let body = `<span class="close" onclick="closeModal()">×</span>
-    <h2>Salvage Bay</h2>
-    <p class="muted">Spend <b style="color:var(--core)">✦ ${fmt(META.cores)}</b> salvage cores on permanent upgrades. They apply to every future run.</p>`;
-  cats.forEach(cat => {
-    body += `<div class="section-title">${cat === 'Start' ? 'Starting Conditions' : 'Survivability'}</div><div class="upg-grid">`;
-    META_UPGRADES.filter(u => u.cat === cat).forEach(u => {
-      const lvl = metaLevel(u.id);
-      const maxed = lvl >= u.max;
-      const cost = maxed ? 0 : u.cost(lvl);
-      const afford = META.cores >= cost && !maxed;
-      body += `<div class="upg ${maxed ? 'maxed' : ''}">
-        <div class="u-top"><span class="u-name">${u.name}</span><span class="u-cat">${u.cat}</span></div>
-        <div class="u-desc">${u.desc(maxed ? lvl - 1 : lvl)}</div>
-        <div class="u-blurb">${u.blurb}</div>
-        <div class="u-foot">
-          <span class="u-lvl">Lv ${lvl}/${u.max}</span>
-          ${maxed ? '<span class="u-cost">MAX</span>'
-            : `<button class="btn small ${afford ? 'primary' : ''}" ${afford ? '' : 'disabled'} onclick="doBuy('${u.id}')">✦ ${cost}</button>`}
-        </div>
-      </div>`;
-    });
-    body += `</div>`;
-  });
-  body += `<div class="row-actions"><button class="btn" onclick="closeModal()">Close</button></div>`;
-  openModal(body);
+/* challenge select — choose the run's modifiers (replaces the Salvage Bay) */
+function challengeCards() {
+  return CHALLENGE_ORDER.map(id => {
+    const ch = CHALLENGES[id];
+    return `<div class="upg">
+      <div class="u-top"><span class="u-name cond-${ch.tone}">${ch.name}</span></div>
+      <div class="u-blurb">${ch.desc}</div>
+      <div class="u-foot"><span></span>
+        <button class="btn small primary" onclick="startRun('${id}')">Start</button></div>
+    </div>`;
+  }).join('');
 }
-function doBuy(id) { if (buyUpgrade(id)) openMetaHub(); renderTop(); }
+function openChallengeSelect(fromGameOver) {
+  openModal(`${fromGameOver ? '' : '<span class="close" onclick="closeModal()">×</span>'}
+    <h2>Choose a Challenge</h2>
+    <p class="muted">Each run is a fresh start — pick the conditions you'll play under.${fromGameOver ? '' : ' Starting a new run abandons the current one.'}</p>
+    <div class="upg-grid">${challengeCards()}</div>
+    ${fromGameOver ? '' : '<div class="row-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>'}`);
+}
 
 /* game over */
 function openGameOver() {
   openModal(`
     <h2 style="color:var(--bad)">All Hands Lost</h2>
-    <p class="muted">Your crew didn't make it. But their salvage lives on.</p>
+    <p class="muted">Your crew didn't make it — run over. Choose your next challenge.</p>
     <div class="gameover-stats">
       <div class="stat"><div class="v">${GAME.sector}</div><div class="k">Sector reached</div></div>
       <div class="stat"><div class="v">${fmtTime(GAME.time)}</div><div class="k">Time survived</div></div>
       <div class="stat"><div class="v">${GAME.roomsBuilt}</div><div class="k">Rooms built</div></div>
       <div class="stat"><div class="v">${GAME.peakCrew}</div><div class="k">Peak crew</div></div>
     </div>
-    <div class="earned">Salvage banked: <b>✦ ${GAME.coresEarned}</b></div>
-    <div class="row-actions">
-      <button class="btn primary" onclick="goMetaThenNew()">Spend & Upgrade</button>
-      <button class="btn" onclick="startNewRun()">New Run ⟶</button>
-    </div>
+    <div class="section-title">Next run</div>
+    <div class="upg-grid">${challengeCards()}</div>
   `);
 }
-function goMetaThenNew() { openMetaHub(); }

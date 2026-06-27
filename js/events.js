@@ -46,8 +46,8 @@ function spawnEvent() {
   const msg = typeof chosen.msg === 'function' ? chosen.msg(GAME, ev) : chosen.msg;
   logMsg(msg, chosen.bad === false ? 'good' : 'bad');
 
-  // schedule next, scaled by sector
-  const scale = 1 / (1 + (GAME.sector - 1) * CONFIG.jump.eventRateScale);
+  // schedule next, scaled by sector depth and the run's challenge
+  const scale = 1 / (1 + (GAME.sector - 1) * CONFIG.jump.eventRateScale) / chMod('eventRateMult', 1);
   const base = CONFIG.events.baseIntervalSec * scale;
   const interval = Math.max(CONFIG.events.minIntervalSec, base * (0.6 + rngFloat() * 0.8));
   GAME.nextEventIn = interval;

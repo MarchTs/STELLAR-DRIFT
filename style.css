@@ -89,6 +89,7 @@ body {
 .top-actions { display: flex; align-items: center; gap: 10px; }
 .cores { display: flex; align-items: center; gap: 5px; font-weight: 700; color: var(--core); font-size: 15px; }
 .core-icon { text-shadow: 0 0 10px var(--core); }
+.challenge-label { font-size: 12px; font-weight: 600; letter-spacing: .5px; }
 
 /* ---------- buttons ---------- */
 .btn {

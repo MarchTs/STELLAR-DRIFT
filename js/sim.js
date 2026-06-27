@@ -1,35 +1,37 @@
 /* STELLAR DRIFT — simulation: new run, the per-tick step, jump/synth, end run */
-function newRun() {
-  // each starting crew is strong in one skill (but can do anything)
-  const startLevel = 3 + metaLevel('start_skill');
-  const crew = SKILL_KEYS.map(sp => makeCrew(sp, startLevel));
+function newRun(challengeId) {
+  const ch = CHALLENGES[challengeId] || CHALLENGES.standard;
+  const cid = CHALLENGES[challengeId] ? challengeId : 'standard';
+  const startLevel = ch.startSkill || 3;
+  const crewCount = ch.crew || 3;
 
-  // extra crew from meta (random specialty)
-  for (let i = 0; i < metaLevel('extra_crew'); i++) {
-    crew.push(makeCrew(pick(SKILL_KEYS), startLevel));
-  }
-  // ensure unique names
+  // crew specialise round-robin across the skills; anyone can still do any job
+  const crew = [];
+  for (let i = 0; i < crewCount; i++) crew.push(makeCrew(SKILL_KEYS[i % SKILL_KEYS.length], startLevel));
   const used = new Set();
   crew.forEach(c => { let n = 0; while (used.has(c.name) && n++ < 50) c.name = pick(CREW_NAMES); used.add(c.name); });
 
-  // bays are column-major (even = top, odd = bottom). Production across the top row,
-  // crew rooms on the bottom.
+  // bays are column-major (even = top, odd = bottom): production across the top row.
   const rooms = [
     makeRoom('reactor', 0), makeRoom('lifesupport', 2), makeRoom('extractor', 4),
     makeRoom('hydroponics', 6), makeRoom('quarters', 1),
   ];
-  if (metaLevel('prebuilt_medbay')) rooms.push(makeRoom('medbay', 3));
+
+  const resMult = ch.resourceMult || 1;
+  const resources = {};
+  Object.keys(CONFIG.start.resources).forEach(k => { resources[k] = CONFIG.start.resources[k] * resMult; });
 
   GAME = {
     sector: 1,
     time: 0,
-    resources: Object.assign({}, CONFIG.start.resources),
+    challenge: cid,
+    resources,
     crew,
     rooms,
     events: [],
     log: [],
     nextEventIn: CONFIG.events.firstEventDelaySec,
-    revivesLeft: metaLevel('revive'),
+    revivesLeft: ch.revives || 0,
     peakCrew: crew.length,
     roomsBuilt: 0,
     gameOver: false,
@@ -38,9 +40,8 @@ function newRun() {
     condition: 'calm',
     stock: rollSectorStock(1),
   };
-  GAME.resources.minerals += metaLevel('start_minerals') * 25;
   clampResources();
-  logMsg('Systems online. Keep your crew alive.', 'good');
+  logMsg(`Systems online — ${ch.name}. Keep your crew alive.`, 'good');
   saveGame();
 }
 
@@ -52,7 +53,7 @@ function step(dt) {
   GAME.time += dt;
 
   const N = CONFIG.needs;
-  const o2SlowMult = 1 - metaLevel('o2_reserve') * 0.05;
+  const o2SlowMult = 1;
 
   // 1. decide each crew's state
   aliveCrew().forEach(updateCrewState);
@@ -164,7 +165,7 @@ function step(dt) {
     // illness event
     const ill = GAME.events.find(e => e.id === 'illness' && e.target === c.id);
     if (ill) {
-      const resist = 1 - metaLevel('illness_resist') * 0.25;
+      const resist = 1;
       n.health -= ill.healthDrain * resist * dt;
     }
 
@@ -273,24 +274,10 @@ function doJumpTo(opt) {
 }
 
 /* ----------------------------------------------------------
-   End run -> bank cores
+   End run
    ---------------------------------------------------------- */
-function computePayout() {
-  const p = CONFIG.payout;
-  const mins = Math.floor(GAME.time / 60);
-  return Math.round(
-    GAME.sector * p.perSector +
-    mins * p.perMinute +
-    GAME.roomsBuilt * p.perRoomBuilt +
-    GAME.peakCrew * p.perPeakCrew
-  );
-}
 function endRun() {
   GAME.gameOver = true;
-  const earned = computePayout();
-  GAME.coresEarned = earned;
-  META.cores += earned;
-  saveMeta();
   clearSave();
-  logMsg(`All crew lost. Banked ${earned} salvage cores.`, 'bad');
+  logMsg('All crew lost. The ship drifts dark and silent.', 'bad');
 }

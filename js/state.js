@@ -11,10 +11,8 @@ function pick(arr) { return arr[Math.floor(rngFloat() * arr.length)]; }
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 
 let GAME = null;   // run state
-let META = null;   // persistent meta state
 
 const SAVE_KEY = 'stellardrift.save.v5';
-const META_KEY = 'stellardrift.meta.v1';
 /* ----------------------------------------------------------
    Resource caps (depend on room levels + meta)
    ---------------------------------------------------------- */
@@ -33,11 +31,10 @@ function cap(st, res) {
   let c = CONFIG.baseCaps[res];
   const m = RES_CAP_SRC[res];
   if (m) { const r = st.rooms.find(x => x.type === m.type); if (r && attrDef(r.type, m.attr)) c *= A_MULT(attrLvl(r, m.attr)); }
-  if (res === 'oxygen') c += metaLevel('o2_reserve') * 25;   // meta reserve stacks additively
   return Math.round(c);
 }
 
-function crewMaxHealth() { return 100 + metaLevel('max_health') * 20; }
+function crewMaxHealth() { return 100; }
 
 /* ----------------------------------------------------------
    Save / load run
@@ -81,6 +78,7 @@ function loadGame() {
     }
     if (GAME && !GAME.hullTier) GAME.hullTier = 1;
     if (GAME && !GAME.condition) GAME.condition = 'calm';
+    if (GAME && !GAME.challenge) GAME.challenge = 'standard';
     return !!GAME && !GAME.gameOver;
   } catch (e) { return false; }
 }

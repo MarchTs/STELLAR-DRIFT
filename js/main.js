@@ -6,14 +6,18 @@ let lastNow = 0;
 let wasGameOver = false;
 let saveTimer = 0;
 
-function startNewRun() {
-  newRun();
+// start a fresh run with the chosen challenge
+function startRun(challengeId) {
+  newRun(challengeId);
+  for (const k in PAWNS) delete PAWNS[k];
   wasGameOver = false;
-  closeModal();
+  _closeModal();          // bypass the game-over re-open guard
+  shipRelayout();
   renderAll();
 }
 
-// When game over, closing any modal should bring back the summary
+// While game over, closing any modal brings back the game-over screen
+// (so you must pick a challenge to continue).
 const _closeModal = closeModal;
 closeModal = function () {
   _closeModal();
@@ -68,17 +72,15 @@ function loop(now) {
 }
 
 function init() {
-  loadMeta();
-  if (!loadGame()) {
-    // no valid run -> fresh start (meta upgrades apply)
-    newRun();
-  }
+  const hadSave = loadGame();
+  if (!hadSave) newRun('standard');   // a default run so the ship renders behind the picker
   renderAll();
   initShip();
+  if (!hadSave) openChallengeSelect(); // first launch -> choose your challenge
 
   $('#btn-jump').onclick = () => { openJumpModal(); };
   $('#btn-synth').onclick = () => { if (synthFuel()) renderAll(); };
-  $('#btn-meta').onclick = openMetaHub;
+  $('#btn-meta').onclick = () => { openChallengeSelect(false); };
 
   // resource flow breakdown on hover
   const resEl = $('#resources');

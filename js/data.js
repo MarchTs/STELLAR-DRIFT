@@ -304,3 +304,19 @@ const CONDITIONS = {
   nebula:     { name: 'Ion Nebula',  icon: '≈', tone: 'bad',  reactorMult: 0.65, desc: 'Ion interference cuts reactor output −35%.' },
 };
 const BAD_CONDITIONS = ['scorching', 'frozen', 'irradiated', 'nebula'];
+
+// ------------------------------------------------------------
+// Run challenges — pick one when starting a run (replaces meta progression).
+// Modifiers: crew (starting count), startSkill (specialty level), resourceMult
+// (starting supplies), eventRateMult (disaster frequency), revives.
+// ------------------------------------------------------------
+const CHALLENGES = {
+  standard:   { name: 'Standard',      tone: 'good', desc: 'A balanced run — 3 skilled crew and a calm starting sector.' },
+  shakedown:  { name: 'Shakedown',     tone: 'good', crew: 4, resourceMult: 1.4, desc: 'A gentle cruise — 4 crew and a well-stocked hold.' },
+  skeleton:   { name: 'Skeleton Crew', tone: 'bad',  crew: 2, desc: 'Just 2 crew to cover every job. Tight.' },
+  lone_wolf:  { name: 'Lone Wolf',     tone: 'bad',  crew: 1, desc: 'One crew member runs the whole ship. Brutal.' },
+  greenhorns: { name: 'Greenhorns',    tone: 'bad',  startSkill: 1, desc: 'Crew start unskilled — everything is slow until they learn.' },
+  scarcity:   { name: 'Scarcity',      tone: 'bad',  resourceMult: 0.5, desc: 'Begin with half the usual supplies and minerals.' },
+  ion_storms: { name: 'Ion Storms',    tone: 'bad',  eventRateMult: 2, desc: 'Disasters strike twice as often.' },
+};
+const CHALLENGE_ORDER = ['standard', 'shakedown', 'skeleton', 'lone_wolf', 'greenhorns', 'scarcity', 'ion_storms'];
