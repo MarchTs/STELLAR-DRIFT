@@ -125,7 +125,7 @@ function resMeter(res) {
   const rateCls = m.hazard ? (rate > 0.05 ? 'down' : rate < -0.05 ? 'up' : '') : rcls;
   return `<div class="res ${m.cls} ${danger ? 'danger' : ''}" data-res="${res}">
     <div class="res-label">${m.label}</div>
-    <div class="res-line"><span class="res-val">${fmt(val)}<span class="res-max">/${fmt(max)}</span></span><span class="rate ${rateCls}">${fmtRate(rate)}</span></div>
+    <div class="res-line"><span class="res-val">${fmt(val)}<span class="res-max">/${fmt(max)}</span></span><span class="rate ${rateCls}">${fmtRate(rate).replace('/s', '')}</span></div>
     <div class="bar"><i style="width:${pct}%"></i></div>
   </div>`;
 }

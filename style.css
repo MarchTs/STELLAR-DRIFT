@@ -47,18 +47,18 @@ body {
 .brand h1 { font-size: 17px; letter-spacing: 3px; margin: 0; font-weight: 700; }
 .brand .sub { color: var(--muted); font-size: 12px; letter-spacing: 1px; }
 
-/* flat, low-clutter resource readout: groups separated by hairline dividers */
-.resources { display: flex; flex: 1; flex-wrap: wrap; justify-content: center; align-items: center; }
-.res-group { display: flex; flex-direction: column; gap: 5px; padding: 0 16px; }
+/* flat, low-clutter resource readout — fixed widths + nowrap so it never reflows */
+.resources { display: flex; flex: 1; flex-wrap: nowrap; justify-content: center; align-items: center; overflow: hidden; }
+.res-group { display: flex; flex-direction: column; gap: 5px; padding: 0 11px; flex: 0 0 auto; }
 .res-group:not(:first-child) { border-left: 1px solid var(--line); }
 .res-group-label { font-size: 8px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; opacity: .65; text-align: center; }
-.res-row { display: flex; gap: 16px; }
-.res { min-width: 58px; cursor: help; }
-.res .res-label { font-size: 9px; color: var(--muted); letter-spacing: .3px; }
-.res .res-line { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.res-row { display: flex; gap: 10px; flex-wrap: nowrap; }
+.res { width: 64px; flex: 0 0 64px; cursor: help; }
+.res .res-label { font-size: 9px; color: var(--muted); letter-spacing: .3px; white-space: nowrap; }
+.res .res-line { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; white-space: nowrap; }
 .res .res-val { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; color: var(--text); }
 .res .res-max { color: var(--muted); font-weight: 400; font-size: 9px; }
-.res .rate { font-size: 9px; }
+.res .rate { font-size: 9px; font-variant-numeric: tabular-nums; }
 .res .bar { height: 3px; border-radius: 3px; background: #0c1322; margin-top: 3px; overflow: hidden; }
 .res .bar > i { display: block; height: 100%; border-radius: 3px; transition: width .2s linear; }
 .res.power .bar > i { background: var(--power); }
