@@ -41,6 +41,7 @@ function newRun(challengeId) {
     stock: rollSectorStock(1),
     sd: 0,
     atStation: false,
+    unlockedBlueprints: new Set(),
   };
   clampResources();
   logMsg(`Systems online — ${ch.name}. Keep your crew alive.`, 'good');
@@ -303,6 +304,41 @@ function doJumpTo(opt) {
   if (c.salvageFuel) GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + c.salvageFuel);
   if (c.salvageMinerals) GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + c.salvageMinerals);
   logMsg(`Jumped to Sector ${opt.sector} — ${c.name}. ${c.desc}`, c.tone === 'good' ? 'good' : 'warn');
+  saveGame();
+  return true;
+}
+
+/* ----------------------------------------------------------
+   Station shop: blueprints & crew recruitment
+   ---------------------------------------------------------- */
+function buyBlueprint(blueprintId) {
+  if (!GAME || GAME.gameOver || !GAME.atStation) return false;
+  const bp = CONFIG.blueprints[blueprintId];
+  if (!bp || GAME.unlockedBlueprints.has(blueprintId)) return false;
+  if (GAME.sd < bp.cost) return false;
+  GAME.sd -= bp.cost;
+  GAME.unlockedBlueprints.add(blueprintId);
+  logMsg(`Acquired blueprint: ${bp.name} (−${bp.cost} SD).`, 'good');
+  saveGame();
+  return true;
+}
+
+function canRecruitCrew() {
+  return GAME && !GAME.gameOver && GAME.atStation &&
+    GAME.crew.length < CONFIG.station.crewMax &&
+    GAME.sd >= CONFIG.station.crewCost;
+}
+
+function recruitCrew() {
+  if (!canRecruitCrew()) return false;
+  GAME.sd -= CONFIG.station.crewCost;
+  const newCrew = makeCrew(pick(SKILL_KEYS), 1);
+  const used = new Set(GAME.crew.map(c => c.name));
+  let n = 0;
+  while (used.has(newCrew.name) && n++ < 50) newCrew.name = pick(CREW_NAMES);
+  GAME.crew.push(newCrew);
+  if (GAME.crew.length > GAME.peakCrew) GAME.peakCrew = GAME.crew.length;
+  logMsg(`Recruited ${newCrew.name} (${SKILLS[newCrew.specialty].name}) — cost ${CONFIG.station.crewCost} SD.`, 'good');
   saveGame();
   return true;
 }

@@ -202,6 +202,22 @@ body {
 .demand-tag { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; }
 .demand-tag.hot { color: var(--fuel); background: rgba(255,157,92,.15); }
 .demand-tag.cold { color: var(--water); background: rgba(90,166,255,.15); }
+
+/* Station tabs */
+.station-tabs { display: flex; gap: 6px; margin: 10px 0; border-bottom: 1px solid var(--line); }
+.station-tab { background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted);
+  padding: 8px 12px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.station-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.station-tab:hover:not(.active) { color: var(--text); }
+
+/* Shop items */
+.shop-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.shop-item { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+  display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; }
+.si-icon { font-size: 20px; text-align: center; }
+.si-info { display: flex; flex-direction: column; gap: 2px; }
+.si-name { font-weight: 600; font-size: 13px; }
+.si-desc { font-size: 11px; color: var(--muted); line-height: 1.3; }
 .tray-msg { font-size: 12px; color: var(--muted); padding: 4px 2px; flex: 1; }
 .tray-hull { font-size: 11px; opacity: .7; }
 .tray-hull:hover { opacity: 1; }

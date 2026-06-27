@@ -348,21 +348,26 @@ function confirmJump(i) {
   }
 }
 
-/* ---------------- space station trading modal ---------------- */
+/* ---------------- space station trading modal with tabs ---------------- */
 const STATION_ICONS = { minerals: '◆', ice: '❄', water: '〜', food: '❀', fuel: '⬡' };
+let stationTab = 'resources';
 
-function openStationModal() {
-  if (!GAME || !stationPrices) return;
+function renderStationTab(tab) {
+  if (tab === 'resources') return renderStationResources();
+  if (tab === 'blueprints') return renderStationBlueprints();
+  if (tab === 'crew') return renderStationCrew();
+  return '';
+}
+
+function renderStationResources() {
+  if (!stationPrices) return '';
   const rows = Object.keys(CONFIG.station.resources).map(res => {
     const p = stationPrices[res];
     const have = Math.floor(GAME.resources[res]);
     const c = cap(GAME, res);
     const room = Math.floor(c - GAME.resources[res]);
     const afford = Math.floor(GAME.sd / p.buy);
-    const demandTag = p.hot
-      ? '<span class="demand-tag hot">▲ hot</span>'
-      : p.cold ? '<span class="demand-tag cold">▼ cold</span>' : '';
-
+    const demandTag = p.hot ? '<span class="demand-tag hot">▲ hot</span>' : p.cold ? '<span class="demand-tag cold">▼ cold</span>' : '';
     const sellBtn = (qty) => {
       const n = qty === 'all' ? have : qty;
       const dis = have < (qty === 'all' ? 1 : qty) ? 'disabled' : '';
@@ -373,7 +378,6 @@ function openStationModal() {
       const dis = (GAME.sd < p.buy || room <= 0 || (qty !== 'max' && (GAME.sd < qty * p.buy || room < qty))) ? 'disabled' : '';
       return `<button class="btn small" ${dis} onclick="tradeStation('buy','${res}','${qty}')">${qty === 'max' ? 'Max' : qty}</button>`;
     };
-
     return `<div class="station-row">
       <div class="sr-meta">
         <span class="sr-icon" style="color:var(--${res})">${STATION_ICONS[res]}</span>
@@ -390,13 +394,108 @@ function openStationModal() {
       </div>
     </div>`;
   }).join('');
+  return `<div class="station-trades">${rows}</div>`;
+}
 
+function renderStationBlueprints() {
+  const bps = Object.entries(CONFIG.blueprints).map(([id, bp]) => {
+    const owned = GAME.unlockedBlueprints.has(id);
+    const afford = GAME.sd >= bp.cost;
+    const btnClass = owned ? '' : (afford ? 'primary' : '');
+    const btnText = owned ? '✓ Owned' : `Buy · ${bp.cost} SD`;
+    const btnDis = owned ? 'disabled' : '';
+    return `<div class="shop-item">
+      <div class="si-icon" style="font-size:18px">${bp.icon}</div>
+      <div class="si-info">
+        <div class="si-name">${bp.name}</div>
+        <div class="si-desc muted">${bp.desc}</div>
+      </div>
+      <button class="btn small ${btnClass}" ${btnDis} onclick="buyBlueprintAndRefresh('${id}')">${btnText}</button>
+    </div>`;
+  }).join('');
+  return `<div class="shop-list">${bps}</div>`;
+}
+
+function renderStationCrew() {
+  const crewCount = GAME.crew.length;
+  const canRecruit = canRecruitCrew();
+  const rows = [];
+  if (crewCount < CONFIG.station.crewMax) {
+    rows.push(`<div class="shop-item">
+      <div class="si-icon">👤</div>
+      <div class="si-info">
+        <div class="si-name">Recruit Crew</div>
+        <div class="si-desc muted">Add a trained crew member with random specialty.</div>
+      </div>
+      <button class="btn small ${canRecruit ? 'primary' : ''}" ${canRecruit ? '' : 'disabled'} onclick="recruitCrewAndRefresh()">
+        ${canRecruit ? `Recruit · ${CONFIG.station.crewCost} SD` : 'Crew Full'}</button>
+    </div>`);
+  } else {
+    rows.push(`<div class="shop-item">
+      <div class="si-icon">👥</div>
+      <div class="si-info">
+        <div class="si-name">Crew Full</div>
+        <div class="si-desc muted">Max crew size (${CONFIG.station.crewMax}) reached.</div>
+      </div>
+    </div>`);
+  }
+  return `<div class="shop-list">${rows.join('')}</div>`;
+}
+
+function openStationModal() {
+  if (!GAME || !stationPrices || !GAME.atStation) return;
+  stationTab = 'resources';
+  const tabBtns = ['resources', 'blueprints', 'crew'].map(t => {
+    const active = stationTab === t ? 'active' : '';
+    const label = t.charAt(0).toUpperCase() + t.slice(1);
+    return `<button class="station-tab ${active}" onclick="switchStationTab('${t}')">${label}</button>`;
+  }).join('');
+  const content = renderStationTab(stationTab);
   openModal(`<span class="close" onclick="closeModal()">×</span>
     <h2>◉ Space Station · Sector ${GAME.sector}</h2>
-    <p class="muted">A neutral trade outpost. Prices reset each visit.</p>
+    <p class="muted">A neutral trade outpost.</p>
     <div class="station-balance">Balance: <b style="color:var(--warn)">${GAME.sd} SD</b></div>
-    <div class="station-trades">${rows}</div>
+    <div class="station-tabs">${tabBtns}</div>
+    ${content}
     <div class="row-actions"><button class="btn primary" onclick="closeModal()">✓ Undock</button></div>`);
+}
+
+function switchStationTab(tab) {
+  stationTab = tab;
+  const content = renderStationTab(tab);
+  const tabBtns = ['resources', 'blueprints', 'crew'].map(t => {
+    const active = tab === t ? 'active' : '';
+    const label = t.charAt(0).toUpperCase() + t.slice(1);
+    return `<button class="station-tab ${active}" onclick="switchStationTab('${t}')">${label}</button>`;
+  }).join('');
+  const modal = $('#modal-card');
+  if (modal) {
+    modal.innerHTML = `<div class="modal-pad">
+      <span class="close" onclick="closeModal()">×</span>
+      <h2>◉ Space Station · Sector ${GAME.sector}</h2>
+      <p class="muted">A neutral trade outpost.</p>
+      <div class="station-balance">Balance: <b style="color:var(--warn)">${GAME.sd} SD</b></div>
+      <div class="station-tabs">${tabBtns}</div>
+      ${content}
+      <div class="row-actions"><button class="btn primary" onclick="closeModal()">✓ Undock</button></div>
+    </div>`;
+  }
+}
+
+function buyBlueprintAndRefresh(blueprintId) {
+  if (buyBlueprint(blueprintId)) {
+    renderAll();
+    openStationModal();
+    switchStationTab('blueprints');
+  }
+}
+
+function recruitCrewAndRefresh() {
+  if (recruitCrew()) {
+    renderAll();
+    openStationModal();
+    switchStationTab('crew');
+  }
 }
 
 function tradeStation(dir, res, amount) {

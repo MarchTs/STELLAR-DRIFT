@@ -63,6 +63,8 @@ const CONFIG = {
     hydroponics:{ powerCost: 2.0, foodOut: 2.2, waterCost: 0.4, o2Cost: 0.3 },
     quarters:   { powerCost: 0.3, beds: 2 },
     medbay:     { powerCost: 1.5 },
+    storage:    { powerCost: 0 },
+    fuelsynthesis: { powerCost: 1.2, fuelOut: 0.8, waterCost: 0.8 },
   },
 
   // level scaling: output & cap multiply by (1 + (level-1)*levelGain)
@@ -136,6 +138,14 @@ const CONFIG = {
     },
     demandMin: 0.6,
     demandMax: 1.8,
+    crewCost: 100,
+    crewMax: 6,
+  },
+
+  // ---- Blueprint shop ----
+  blueprints: {
+    storage:        { name: 'Storage Room',      icon: '📦', cost: 200, desc: 'Extra cargo bay. Increases all resource caps.' },
+    fuelsynthesis:  { name: 'Fuel Synthesis',    icon: '⚗', cost: 300, desc: 'Automated refinery. Converts water to fuel continuously.' },
   },
 };
 
@@ -164,6 +174,8 @@ const ROOM_DEFS = {
   medbay:      { name: 'Medbay',      icon: '✚', staffRole: null,       auto: true,  desc: 'Injured or sick crew heal here. Needs power.' },
   engine:      { name: 'Engine',      icon: '🚀', staffRole: null,       auto: true,  desc: 'Stores fuel and drives FTL jumps. Upgrade for a bigger fuel reserve and cheaper jumps.' },
   messhall:    { name: 'Mess Hall',   icon: '🍴', staffRole: null,       auto: true,  desc: 'A proper galley. Crew eat here for a morale boost instead of grazing the Hydroponics bay.' },
+  storage:     { name: 'Storage Room', icon: '📦', staffRole: null,      auto: true,  desc: 'Extra cargo bay. Increases all resource storage capacity.' },
+  fuelsynthesis: { name: 'Fuel Synthesis', icon: '⚗', staffRole: null,  auto: true,  desc: 'Automated refinery. Converts water into fuel continuously. Needs power.' },
 };
 
 // random crew names
@@ -253,6 +265,16 @@ const ROOM_ATTRS = {
       hint: (l) => `+${_f(CONFIG.needs.messMorale * A_MULT(l))}/s morale while eating` },
     { key: 'seats',   name: 'Seats',        kind: 'beds', base: 24, max: 6, baseN: 3,
       hint: (l) => `${A_BEDS(3, l)} seats` },
+  ],
+  storage: [
+    { key: 'capacity', name: 'Capacity Boost', kind: 'mult', base: 20, max: 10,
+      hint: (l) => `+${_r((A_MULT(l) - 1) * 100)}% to all resource caps` },
+  ],
+  fuelsynthesis: [
+    { key: 'output',     name: 'Output',      kind: 'mult', base: 28, max: 10,
+      hint: (l) => `+${_f(CONFIG.rooms.fuelsynthesis.fuelOut * A_MULT(l))}/s fuel` },
+    { key: 'efficiency', name: 'Efficiency',  kind: 'eff',  base: 22, max: 6,
+      hint: (l) => `power draw −${_pct(l)}%` },
   ],
 };
 

@@ -84,6 +84,7 @@ function loadGame() {
     if (GAME && !GAME.challenge) GAME.challenge = 'standard';
     if (GAME && GAME.sd === undefined) GAME.sd = 0;
     if (GAME && GAME.atStation === undefined) GAME.atStation = false;
+    if (GAME && !GAME.unlockedBlueprints) GAME.unlockedBlueprints = new Set();
     return !!GAME && !GAME.gameOver;
   } catch (e) { return false; }
 }
