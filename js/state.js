@@ -28,10 +28,13 @@ const RES_CAP_SRC = {
   fuel:     { type: 'engine',      attr: 'fuelstorage' },
 };
 function cap(st, res) {
-  let c = CONFIG.baseCaps[res];
+  const base = CONFIG.baseCaps[res];
   const m = RES_CAP_SRC[res];
-  if (m) { const r = st.rooms.find(x => x.type === m.type); if (r && attrDef(r.type, m.attr)) c *= A_MULT(attrLvl(r, m.attr)); }
-  return Math.round(c);
+  if (!m) return Math.round(base);
+  // every module of the storage type stacks: each adds base * its storage multiplier
+  let c = 0;
+  st.rooms.forEach(r => { if (r.type === m.type && attrDef(r.type, m.attr)) c += base * A_MULT(attrLvl(r, m.attr)); });
+  return Math.round(c || base);
 }
 
 function crewMaxHealth() { return 100; }
