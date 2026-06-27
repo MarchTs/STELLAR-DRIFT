@@ -114,10 +114,10 @@ function step(dt) {
     roomsOfType('extractor').forEach(r => {
       const staff = staffOn(r.id);
       if (staff <= 0) return;
-      const m = attrMult(r, 'output') * staff * mineMult * dt;
-      // only pull from the sector what we can actually store (don't waste a full hold)
-      const dMin = Math.min(EX.mineralsOut * m, GAME.stock.minerals, cap(GAME, 'minerals') - R.minerals);
-      const dIce = Math.min(EX.iceOut * m, GAME.stock.ice, cap(GAME, 'ice') - R.ice);
+      const base = staff * mineMult * dt;
+      // ore scales with Ore Yield, ice with Ice Yield; only pull what we can store
+      const dMin = Math.min(EX.mineralsOut * attrMult(r, 'output') * base, GAME.stock.minerals, cap(GAME, 'minerals') - R.minerals);
+      const dIce = Math.min(EX.iceOut * attrMult(r, 'iceyield') * base, GAME.stock.ice, cap(GAME, 'ice') - R.ice);
       GAME.stock.minerals -= dMin; R.minerals += dMin;
       GAME.stock.ice -= dIce; R.ice += dIce;
       R.co2 += EX.co2Out * attrMult(r, 'output') * dt;   // drilling vents CO₂; more with Yield

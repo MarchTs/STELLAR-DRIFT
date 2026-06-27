@@ -197,10 +197,12 @@ const ROOM_ATTRS = {
       hint: (l) => `power draw −${_pct(l)}%` },
   ],
   extractor: [
-    { key: 'output',     name: 'Yield',          kind: 'mult', base: 30, max: 10,
+    { key: 'output',     name: 'Ore Yield',       kind: 'mult', base: 30, max: 10,
       hint: (l) => `+${_f(CONFIG.rooms.extractor.mineralsOut * A_MULT(l))}/s minerals per miner` },
     { key: 'storage',    name: 'Mineral Storage', kind: 'mult', base: 18, max: 10,
       hint: (l) => `mineral capacity ${_r(CONFIG.baseCaps.minerals * A_MULT(l))}` },
+    { key: 'iceyield',   name: 'Ice Yield',        kind: 'mult', base: 26, max: 10,
+      hint: (l) => `+${_f(CONFIG.rooms.extractor.iceOut * A_MULT(l))}/s ice per miner` },
     { key: 'icestorage', name: 'Ice Storage',     kind: 'mult', base: 18, max: 10,
       hint: (l) => `ice capacity ${_r(CONFIG.baseCaps.ice * A_MULT(l))}` },
     { key: 'efficiency', name: 'Efficiency',      kind: 'eff',  base: 22, max: 6,

@@ -82,7 +82,7 @@ function resourceBreakdown(res) {
     });
     if (powered) roomsOfType('hydroponics').forEach(r => { if (staffOn(r.id) > 0) add(sinks, 'Hydroponics', RM.hydroponics.waterCost * attrMult(r, 'output') * staffOn(r.id)); });
   } else if (res === 'ice') {
-    if (powered) roomsOfType('extractor').forEach(r => { if (staffOn(r.id) > 0) add(sources, 'Mining Drone', RM.extractor.iceOut * attrMult(r, 'output') * staffOn(r.id) * mineMult); });
+    if (powered) roomsOfType('extractor').forEach(r => { if (staffOn(r.id) > 0) add(sources, 'Mining Drone', RM.extractor.iceOut * attrMult(r, 'iceyield') * staffOn(r.id) * mineMult); });
     if (powered) roomsOfType('lifesupport').forEach(r => { if (staffOn(r.id) > 0) add(sinks, 'Life Support (melt)', RM.lifesupport.iceMelt * attrMult(r, 'water')); });
   } else if (res === 'minerals') {
     if (powered) roomsOfType('extractor').forEach(r => { if (staffOn(r.id) > 0) add(sources, 'Mining Drone', RM.extractor.mineralsOut * attrMult(r, 'output') * staffOn(r.id) * mineMult); });
