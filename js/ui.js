@@ -155,9 +155,10 @@ function staffCountText(room) {
   return present.length ? `${present.length} working` : 'idle';
 }
 
+let _trayHtml = '';
 function renderShip() {
   // The ship is drawn on the canvas by ship.js. Building is done by clicking an
-  // empty bay on the ship; here we just show a hint line.
+  // empty bay on the ship; here we just show a hint line + the hull-expand button.
   const tray = $('#build-tray');
   if (!tray) return;
   const msg = shipFull()
@@ -165,7 +166,10 @@ function renderShip() {
     : `▦ Click an empty bay on the ship to build a module.`;
   const hullLink = hullTier() < CONFIG.hull.maxTier
     ? `<button class="btn small ghost tray-hull" onclick="openHullModal()">⊕ Expand Hull</button>` : '';
-  tray.innerHTML = `<div class="tray-msg">${msg}</div>${hullLink}`;
+  const html = `<div class="tray-msg">${msg}</div>${hullLink}`;
+  // only rewrite when it actually changes — otherwise the button element is
+  // replaced every frame and clicks (mousedown→mouseup) get lost
+  if (html !== _trayHtml) { tray.innerHTML = html; _trayHtml = html; }
 }
 
 /* hull expansion — behind a confirmation so it isn't clicked by accident */
