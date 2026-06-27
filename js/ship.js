@@ -13,8 +13,10 @@ const WALL_ROWS = [4, 7];                 // walls separating bays from the corr
 // Dimensions recompute from it, so upgrading the hull widens the ship.
 let HULL_COLS = 4, COLS = 21, WIDTH = COLS * TILE;
 const HEIGHT = ROWS * TILE;
-const MARGIN_Y = 46;                 // band of open space above & below the hull
+const MARGIN_Y = 50;                  // band of open space above & below the hull
+const MARGIN_X = 64;                  // band of space left (engines) & right (bow)
 const CANVAS_H = HEIGHT + MARGIN_Y * 2;
+function canvasW() { return WIDTH + MARGIN_X * 2; }
 
 /* ---------------- ambient space: asteroids & passing ships ---------------- */
 let SPACE = null;
@@ -23,19 +25,19 @@ function bandY() {
                              : MARGIN_Y + HEIGHT + 4 + Math.random() * (MARGIN_Y - 10);
 }
 function makeAsteroid() {
-  return { x: Math.random() * WIDTH, y: bandY(), r: 3 + Math.random() * 6,
+  return { x: Math.random() * canvasW(), y: bandY(), r: 3 + Math.random() * 6,
     vx: -(3 + Math.random() * 6), spin: Math.random() * 6, vspin: (Math.random() - 0.5) * 0.7,
     verts: 5 + Math.floor(Math.random() * 4), seed: Math.random() * 10 };
 }
 function makePassingShip(tint) {
   const ltr = Math.random() < 0.5;
-  return { x: ltr ? -34 : WIDTH + 34, y: bandY(), dir: ltr ? 1 : -1,
+  return { x: ltr ? -34 : canvasW() + 34, y: bandY(), dir: ltr ? 1 : -1,
     vx: (ltr ? 1 : -1) * (16 + Math.random() * 24), w: 16 + Math.random() * 14, tint: tint || '#9fb4d8' };
 }
 function initSpace() { SPACE = { asteroids: [], ships: [], shipTimer: 5 + Math.random() * 8 }; for (let i = 0; i < 6; i++) SPACE.asteroids.push(makeAsteroid()); }
 function updateSpace(dt) {
   if (!SPACE) initSpace();
-  SPACE.asteroids.forEach(a => { a.x += a.vx * dt; a.spin += a.vspin * dt; if (a.x < -24) { a.x = WIDTH + 24; a.y = bandY(); } });
+  SPACE.asteroids.forEach(a => { a.x += a.vx * dt; a.spin += a.vspin * dt; if (a.x < -24) { a.x = canvasW() + 24; a.y = bandY(); } });
   SPACE.shipTimer -= dt;
   if (SPACE.shipTimer <= 0) { SPACE.ships.push(makePassingShip()); SPACE.shipTimer = 11 + Math.random() * 16; }
   // a tinted ship glides by when scavengers raid (red) or you find salvage (green)
@@ -46,7 +48,7 @@ function updateSpace(dt) {
     }
   });
   SPACE.ships.forEach(s => s.x += s.vx * dt);
-  SPACE.ships = SPACE.ships.filter(s => s.x > -60 && s.x < WIDTH + 60);
+  SPACE.ships = SPACE.ships.filter(s => s.x > -60 && s.x < canvasW() + 60);
 }
 function drawAsteroid(ctx, a) {
   ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.spin);
@@ -67,15 +69,68 @@ function drawPassingShip(ctx, s) {
   ctx.beginPath(); ctx.moveTo(s.w / 2, 0); ctx.lineTo(-s.w / 2, -3.5); ctx.lineTo(-s.w / 3, 0); ctx.lineTo(-s.w / 2, 3.5); ctx.closePath(); ctx.fill();
   ctx.restore();
 }
+// big planet drifting in the corner
+function drawPlanet(ctx) {
+  const W = canvasW(), px = W * 0.86, py = CANVAS_H * 1.05, r = CANVAS_H * 0.78;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(px, py, r, 0, 7); ctx.clip();
+  const g = ctx.createLinearGradient(px - r, py - r, px + r * 0.4, py + r * 0.4);
+  g.addColorStop(0, '#9a8662'); g.addColorStop(0.45, '#6c5a40'); g.addColorStop(0.52, '#241c12'); g.addColorStop(1, '#060403');
+  ctx.fillStyle = g; ctx.fillRect(px - r, py - r, 2 * r, 2 * r);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(190,160,120,.25)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(px, py, r, 0, 7); ctx.stroke();
+}
 function drawSpace(ctx) {
-  ctx.fillStyle = '#05080f'; ctx.fillRect(0, 0, WIDTH, CANVAS_H);
+  const W = canvasW();
+  ctx.fillStyle = '#04060c'; ctx.fillRect(0, 0, W, CANVAS_H);
+  // soft nebula clouds
+  const neb = (cx, cy, rr, col) => { const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, CANVAS_H); };
+  neb(W * 0.22, CANVAS_H * 0.28, W * 0.55, 'rgba(132,44,60,.20)');
+  neb(W * 0.72, CANVAS_H * 0.7, W * 0.5, 'rgba(70,46,120,.16)');
+  // stars
   STARS && STARS.forEach(s => {
-    ctx.globalAlpha = s.a; ctx.fillStyle = '#9fb4d8';
+    ctx.globalAlpha = s.a; ctx.fillStyle = '#cfe0f5';
     if (jumpFlash > 0) { const len = jumpFlash * 90 * (s.r + 0.4); ctx.fillRect(s.x - len, s.y - s.r * 0.5, len, Math.max(1, s.r)); }
     else { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill(); }
   });
   ctx.globalAlpha = 1;
+  drawPlanet(ctx);
   if (SPACE) { SPACE.asteroids.forEach(a => drawAsteroid(ctx, a)); SPACE.ships.forEach(s => drawPassingShip(ctx, s)); }
+}
+
+// the ship hull silhouette: engine nacelles (left), wings, body plate, bow (right)
+function drawHull(ctx) {
+  const W = WIDTH, H = HEIGHT, midY = H / 2;
+  const plate = '#586773', plateHi = '#74858f', plateLo = '#3b4751', edge = '#a9bcc7';
+  // ENGINE NACELLES (poke into the left margin)
+  [-0.34, 0, 0.34].forEach(f => {
+    const ey = midY + f * H;
+    ctx.fillStyle = plateLo; roundRect(ctx, -46, ey - 10, 52, 20, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(130,185,255,.85)'; roundRect(ctx, -49, ey - 5, 6, 10, 2); ctx.fill();
+    ctx.fillStyle = 'rgba(130,185,255,.28)'; ctx.fillRect(-62, ey - 3, 14, 6);
+  });
+  // WINGS (angled plates, left half top & bottom)
+  ctx.fillStyle = plateLo; ctx.strokeStyle = edge; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(W * 0.06, -4); ctx.lineTo(W * 0.46, -4); ctx.lineTo(W * 0.34, -38); ctx.lineTo(W * 0.12, -38); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W * 0.06, H + 4); ctx.lineTo(W * 0.46, H + 4); ctx.lineTo(W * 0.34, H + 38); ctx.lineTo(W * 0.12, H + 38); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // BODY plate + bow (beveled, pointed to the right)
+  const b = 18;
+  ctx.fillStyle = plate; ctx.strokeStyle = edge; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(-10 + b, -10);
+  ctx.lineTo(W - 6, -10);
+  ctx.lineTo(W + 10, -10 + b);
+  ctx.lineTo(W + 46, midY - 16); ctx.lineTo(W + 62, midY); ctx.lineTo(W + 46, midY + 16);
+  ctx.lineTo(W + 10, H + 10 - b);
+  ctx.lineTo(W - 6, H + 10);
+  ctx.lineTo(-10 + b, H + 10);
+  ctx.lineTo(-10, H + 10 - b);
+  ctx.lineTo(-10, -10 + b);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  // top-edge highlight
+  ctx.fillStyle = plateHi; ctx.fillRect(-10 + b, -10, W + 30, 3);
 }
 function syncHull() {
   HULL_COLS = 4 + (((GAME && GAME.hullTier) || 1) - 1);
@@ -321,13 +376,14 @@ function setupCanvas() {
   const cv = document.querySelector('#ship-canvas');
   if (!cv) return;
   const dpr = window.devicePixelRatio || 1;
-  cv.width = WIDTH * dpr; cv.height = CANVAS_H * dpr;
+  const CW = canvasW();
+  cv.width = CW * dpr; cv.height = CANVAS_H * dpr;
   // natural size up to the pane width; max-width:100% + height:auto scales it
   // down proportionally (zoom out) when the hull gets wide
-  cv.style.width = WIDTH + 'px'; cv.style.height = 'auto';
+  cv.style.width = CW + 'px'; cv.style.height = 'auto';
   cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
   STARS = [];                              // (re)scatter stars across the whole canvas
-  for (let i = 0; i < 70; i++) STARS.push({ x: Math.random() * WIDTH, y: Math.random() * CANVAS_H, r: Math.random() * 1.2 + 0.2, a: Math.random() * 0.5 + 0.2 });
+  for (let i = 0; i < 80; i++) STARS.push({ x: Math.random() * CW, y: Math.random() * CANVAS_H, r: Math.random() * 1.2 + 0.2, a: Math.random() * 0.5 + 0.2 });
   initSpace();
 }
 
@@ -349,11 +405,12 @@ function drawShip() {
   ensureLayout();
   const ctx = cv.getContext('2d');
 
-  // open space (stars, asteroids, passing ships) fills the whole canvas...
+  // open space (nebula, planet, stars, asteroids, passing ships) fills the whole canvas...
   drawSpace(ctx);
-  // ...then the hull is drawn into the middle, leaving a band of space top & bottom
+  // ...then the hull is drawn into the middle, surrounded by a band of space
   ctx.save();
-  ctx.translate(0, MARGIN_Y);
+  ctx.translate(MARGIN_X, MARGIN_Y);
+  drawHull(ctx);   // hull silhouette (engines, wings, body, bow) behind the bays
 
   // base interior floor (corridor)
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (WALK[y][x]) tileFill(ctx, x, y, '#141b29');
@@ -369,11 +426,12 @@ function drawShip() {
   ctx.strokeStyle = 'rgba(120,150,190,.05)'; ctx.lineWidth = 1;
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (WALK[y][x]) ctx.strokeRect(x * TILE + .5, y * TILE + .5, TILE - 1, TILE - 1);
 
-  // walls
+  // walls — hull border drawn as light plating, interior walls dark
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     if (!WALL[y][x]) continue;
-    ctx.fillStyle = '#0a0f1a'; ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
-    ctx.fillStyle = '#1c2740'; ctx.fillRect(x * TILE, y * TILE, TILE, 3);          // lit top edge
+    const border = x === 0 || x === COLS - 1 || y === 0 || y === ROWS - 1;
+    ctx.fillStyle = border ? '#586773' : '#0a0f1a'; ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+    ctx.fillStyle = border ? '#74858f' : '#1c2740'; ctx.fillRect(x * TILE, y * TILE, TILE, 3);   // lit top edge
   }
 
   // doors (a lighter sill in the wall gap)
@@ -446,7 +504,7 @@ function drawShip() {
     ctx.save();
     ctx.globalAlpha = Math.min(0.85, jumpFlash);
     ctx.fillStyle = '#dff0ff';
-    ctx.fillRect(0, 0, WIDTH, CANVAS_H);
+    ctx.fillRect(0, 0, canvasW(), CANVAS_H);
     ctx.restore();
   }
 }
@@ -506,8 +564,8 @@ function drawPawn(ctx, p) {
 function eventTile(cv, e) {
   const rect = cv.getBoundingClientRect();
   return {
-    tx: Math.floor((e.clientX - rect.left) / rect.width * COLS),
-    // account for the top space margin: map to ship-interior rows
+    // account for the space margins around the hull
+    tx: Math.floor(((e.clientX - rect.left) / rect.width * canvasW() - MARGIN_X) / TILE),
     ty: Math.floor(((e.clientY - rect.top) / rect.height * CANVAS_H - MARGIN_Y) / TILE),
   };
 }
