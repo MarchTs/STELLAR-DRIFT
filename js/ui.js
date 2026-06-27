@@ -263,8 +263,11 @@ function renderLog() {
 
 /* ---------------- buttons state ---------------- */
 function renderControls() {
-  $('#btn-jump').disabled = !canJump();
-  $('#btn-jump').textContent = `Jump ⟶ (${jumpFuelCost()} fuel)`;
+  const btnJump = $('#btn-jump');
+  btnJump.disabled = !canJump();
+  btnJump.textContent = `Jump ⟶ (${jumpFuelCost()} fuel)`;
+  const low = GAME.stock && GAME.stock.minerals < 30 && GAME.stock.ice < 30;
+  btnJump.classList.toggle('flash', low && !GAME.atStation);
   const synth = $('#btn-synth');
   if (synth) {
     synth.disabled = !canSynthFuel();

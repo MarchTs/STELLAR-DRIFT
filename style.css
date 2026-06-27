@@ -102,6 +102,8 @@ body {
 .btn.ghost { background: transparent; }
 .btn.primary { background: linear-gradient(180deg, #2c6bd6, #2457b0); border-color: #3d7be8; color: #fff; font-weight: 600; }
 .btn.primary:hover { filter: brightness(1.12); }
+.btn.flash { animation: flash 0.8s ease-in-out infinite; }
+@keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* ---------- layout ---------- */
 #main { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; align-items: start; }
