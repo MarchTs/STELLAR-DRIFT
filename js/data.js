@@ -81,6 +81,9 @@ const CONFIG = {
     reactor: 80,
     engine: 70,
     messhall: 55,
+    storage: 40,
+    fuelsynthesis: 75,
+    manufactor: 80,
     upgradeBase: 30,    // upgrade cost = upgradeBase * level * 1.6
     upgradeMult: 1.6,
   },

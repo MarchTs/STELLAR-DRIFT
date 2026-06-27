@@ -8,8 +8,9 @@ function makeRoom(type, bay) {
 /* ----------------------------------------------------------
    Build / upgrade rooms
    ---------------------------------------------------------- */
-const BUILDABLE = ['extractor', 'hydroponics', 'quarters', 'medbay', 'messhall', 'lifesupport', 'reactor', 'engine'];
+const BUILDABLE = ['extractor', 'hydroponics', 'quarters', 'medbay', 'messhall', 'lifesupport', 'reactor', 'engine', 'storage', 'fuelsynthesis', 'manufactor'];
 const SINGLE_INSTANCE = { medbay: 1, engine: 1, messhall: 1 };   // at most one of these
+const BLUEPRINT_GATED = { storage: true, fuelsynthesis: true, manufactor: true };  // require blueprint unlock
 // bay count grows with the hull tier (tier 1 = 8 bays, +2 per tier). See js/ship.js.
 function hullTier() { return (GAME && GAME.hullTier) || 1; }
 function maxRooms() { return (4 + (hullTier() - 1)) * 2; }
@@ -31,7 +32,13 @@ function expandHull() {
   return true;
 }
 function buildableTypes() {
-  return BUILDABLE.filter(t => !(SINGLE_INSTANCE[t] && roomsOfType(t).length >= SINGLE_INSTANCE[t]));
+  return BUILDABLE.filter(t => {
+    // filter out single-instance rooms that already exist
+    if (SINGLE_INSTANCE[t] && roomsOfType(t).length >= SINGLE_INSTANCE[t]) return false;
+    // filter out blueprint-gated rooms that haven't been unlocked
+    if (BLUEPRINT_GATED[t] && !GAME.unlockedBlueprints.has(t)) return false;
+    return true;
+  });
 }
 function buildCost(type) { return CONFIG.build[type] || 50; }
 function canBuild(type) {
