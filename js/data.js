@@ -229,7 +229,7 @@ const ROOM_ATTRS = {
   ],
   extractor: [
     { key: 'output',     name: 'Ore Yield',       kind: 'mult', base: 30, max: 10,
-      hint: (l) => `+${_f(CONFIG.rooms.extractor.mineralsOut * A_MULT(l))}/s minerals per miner` },
+      hint: (l) => `+${_f(CONFIG.rooms.extractor.oreOut * A_MULT(l))}/s ore per miner` },
     { key: 'storage',    name: 'Ore Storage', kind: 'mult', base: 18, max: 10,
       hint: (l) => `ore capacity ${_r(CONFIG.baseCaps.ore * A_MULT(l))}` },
     { key: 'iceyield',   name: 'Ice Yield',        kind: 'mult', base: 26, max: 10,
