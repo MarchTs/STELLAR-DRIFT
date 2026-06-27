@@ -13,6 +13,70 @@ const WALL_ROWS = [4, 7];                 // walls separating bays from the corr
 // Dimensions recompute from it, so upgrading the hull widens the ship.
 let HULL_COLS = 4, COLS = 21, WIDTH = COLS * TILE;
 const HEIGHT = ROWS * TILE;
+const MARGIN_Y = 46;                 // band of open space above & below the hull
+const CANVAS_H = HEIGHT + MARGIN_Y * 2;
+
+/* ---------------- ambient space: asteroids & passing ships ---------------- */
+let SPACE = null;
+function bandY() {
+  return Math.random() < 0.5 ? 4 + Math.random() * (MARGIN_Y - 10)
+                             : MARGIN_Y + HEIGHT + 4 + Math.random() * (MARGIN_Y - 10);
+}
+function makeAsteroid() {
+  return { x: Math.random() * WIDTH, y: bandY(), r: 3 + Math.random() * 6,
+    vx: -(3 + Math.random() * 6), spin: Math.random() * 6, vspin: (Math.random() - 0.5) * 0.7,
+    verts: 5 + Math.floor(Math.random() * 4), seed: Math.random() * 10 };
+}
+function makePassingShip(tint) {
+  const ltr = Math.random() < 0.5;
+  return { x: ltr ? -34 : WIDTH + 34, y: bandY(), dir: ltr ? 1 : -1,
+    vx: (ltr ? 1 : -1) * (16 + Math.random() * 24), w: 16 + Math.random() * 14, tint: tint || '#9fb4d8' };
+}
+function initSpace() { SPACE = { asteroids: [], ships: [], shipTimer: 5 + Math.random() * 8 }; for (let i = 0; i < 6; i++) SPACE.asteroids.push(makeAsteroid()); }
+function updateSpace(dt) {
+  if (!SPACE) initSpace();
+  SPACE.asteroids.forEach(a => { a.x += a.vx * dt; a.spin += a.vspin * dt; if (a.x < -24) { a.x = WIDTH + 24; a.y = bandY(); } });
+  SPACE.shipTimer -= dt;
+  if (SPACE.shipTimer <= 0) { SPACE.ships.push(makePassingShip()); SPACE.shipTimer = 11 + Math.random() * 16; }
+  // a tinted ship glides by when scavengers raid (red) or you find salvage (green)
+  GAME.events.forEach(ev => {
+    if ((ev.id === 'raiders' || ev.id === 'salvage') && !ev._shipShown) {
+      ev._shipShown = true;
+      SPACE.ships.push(makePassingShip(ev.id === 'raiders' ? '#ff6b6b' : '#7ee08a'));
+    }
+  });
+  SPACE.ships.forEach(s => s.x += s.vx * dt);
+  SPACE.ships = SPACE.ships.filter(s => s.x > -60 && s.x < WIDTH + 60);
+}
+function drawAsteroid(ctx, a) {
+  ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.spin);
+  ctx.fillStyle = '#39414f'; ctx.strokeStyle = '#4d5a6e'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < a.verts; i++) {
+    const ang = i / a.verts * 6.2832, rr = a.r * (0.7 + 0.45 * Math.sin(a.seed + i * 1.7));
+    const x = Math.cos(ang) * rr, y = Math.sin(ang) * rr;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+function drawPassingShip(ctx, s) {
+  ctx.save(); ctx.translate(s.x, s.y); ctx.scale(s.dir, 1);
+  ctx.fillStyle = 'rgba(120,180,255,.45)'; ctx.fillRect(-s.w / 2 - 5, -1.3, 5, 2.6);   // engine trail
+  ctx.fillStyle = s.tint;
+  ctx.beginPath(); ctx.moveTo(s.w / 2, 0); ctx.lineTo(-s.w / 2, -3.5); ctx.lineTo(-s.w / 3, 0); ctx.lineTo(-s.w / 2, 3.5); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function drawSpace(ctx) {
+  ctx.fillStyle = '#05080f'; ctx.fillRect(0, 0, WIDTH, CANVAS_H);
+  STARS && STARS.forEach(s => {
+    ctx.globalAlpha = s.a; ctx.fillStyle = '#9fb4d8';
+    if (jumpFlash > 0) { const len = jumpFlash * 90 * (s.r + 0.4); ctx.fillRect(s.x - len, s.y - s.r * 0.5, len, Math.max(1, s.r)); }
+    else { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill(); }
+  });
+  ctx.globalAlpha = 1;
+  if (SPACE) { SPACE.asteroids.forEach(a => drawAsteroid(ctx, a)); SPACE.ships.forEach(s => drawPassingShip(ctx, s)); }
+}
 function syncHull() {
   HULL_COLS = 4 + (((GAME && GAME.hullTier) || 1) - 1);
   COLS = HULL_COLS * 5 + 1;               // each bay column = 4 wide + 1 divider, + left border
@@ -127,6 +191,7 @@ function bayOfType(type) {
 function updateShip(dt) {
   if (!GAME) return;
   if (jumpFlash > 0) jumpFlash = Math.max(0, jumpFlash - dt);
+  updateSpace(dt);
   ensureLayout();
   const alive = GAME.crew.filter(c => c.state !== 'dead');
 
@@ -256,13 +321,14 @@ function setupCanvas() {
   const cv = document.querySelector('#ship-canvas');
   if (!cv) return;
   const dpr = window.devicePixelRatio || 1;
-  cv.width = WIDTH * dpr; cv.height = HEIGHT * dpr;
+  cv.width = WIDTH * dpr; cv.height = CANVAS_H * dpr;
   // natural size up to the pane width; max-width:100% + height:auto scales it
   // down proportionally (zoom out) when the hull gets wide
   cv.style.width = WIDTH + 'px'; cv.style.height = 'auto';
   cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
-  STARS = [];                              // (re)scatter stars to fill the current width
-  for (let i = 0; i < 60; i++) STARS.push({ x: Math.random() * WIDTH, y: Math.random() * HEIGHT, r: Math.random() * 1.2 + 0.2, a: Math.random() * 0.5 + 0.2 });
+  STARS = [];                              // (re)scatter stars across the whole canvas
+  for (let i = 0; i < 70; i++) STARS.push({ x: Math.random() * WIDTH, y: Math.random() * CANVAS_H, r: Math.random() * 1.2 + 0.2, a: Math.random() * 0.5 + 0.2 });
+  initSpace();
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -283,16 +349,11 @@ function drawShip() {
   ensureLayout();
   const ctx = cv.getContext('2d');
 
-  // space backdrop
-  ctx.fillStyle = '#05080f'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  STARS && STARS.forEach(s => {
-    ctx.globalAlpha = s.a; ctx.fillStyle = '#9fb4d8';
-    if (jumpFlash > 0) {                                  // warp: stars streak horizontally
-      const len = jumpFlash * 90 * (s.r + 0.4);
-      ctx.fillRect(s.x - len, s.y - s.r * 0.5, len, Math.max(1, s.r));
-    } else { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill(); }
-  });
-  ctx.globalAlpha = 1;
+  // open space (stars, asteroids, passing ships) fills the whole canvas...
+  drawSpace(ctx);
+  // ...then the hull is drawn into the middle, leaving a band of space top & bottom
+  ctx.save();
+  ctx.translate(0, MARGIN_Y);
 
   // base interior floor (corridor)
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (WALK[y][x]) tileFill(ctx, x, y, '#141b29');
@@ -378,12 +439,14 @@ function drawShip() {
   // pawns
   Object.values(PAWNS).forEach(p => drawPawn(ctx, p));
 
-  // jump flash — a bright bluish-white wash that fades out
+  ctx.restore();   // end hull translate
+
+  // jump flash — a bright bluish-white wash that fades out (whole canvas)
   if (jumpFlash > 0) {
     ctx.save();
     ctx.globalAlpha = Math.min(0.85, jumpFlash);
     ctx.fillStyle = '#dff0ff';
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillRect(0, 0, WIDTH, CANVAS_H);
     ctx.restore();
   }
 }
@@ -444,7 +507,8 @@ function eventTile(cv, e) {
   const rect = cv.getBoundingClientRect();
   return {
     tx: Math.floor((e.clientX - rect.left) / rect.width * COLS),
-    ty: Math.floor((e.clientY - rect.top) / rect.height * ROWS),
+    // account for the top space margin: map to ship-interior rows
+    ty: Math.floor(((e.clientY - rect.top) / rect.height * CANVAS_H - MARGIN_Y) / TILE),
   };
 }
 function bayAtTile(tx, ty) {
