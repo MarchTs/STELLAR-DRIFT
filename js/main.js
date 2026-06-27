@@ -78,7 +78,6 @@ function init() {
 
   $('#btn-jump').onclick = () => { openJumpModal(); };
   $('#btn-synth').onclick = () => { if (synthFuel()) renderAll(); };
-  $('#btn-hull').onclick = () => { if (expandHull()) { shipRelayout(); renderAll(); } };
   $('#btn-meta').onclick = openMetaHub;
 
   // resource flow breakdown on hover

@@ -159,9 +159,30 @@ function renderShip() {
   // empty bay on the ship; here we just show a hint line.
   const tray = $('#build-tray');
   if (!tray) return;
-  tray.innerHTML = shipFull()
-    ? `<div class="tray-msg">All ${maxRooms()} bays occupied — expand the hull or demolish a module.</div>`
-    : `<div class="tray-msg">▦ Click an empty bay on the ship to build a module.</div>`;
+  const msg = shipFull()
+    ? `All ${maxRooms()} bays occupied — demolish a module or expand the hull.`
+    : `▦ Click an empty bay on the ship to build a module.`;
+  const hullLink = hullTier() < CONFIG.hull.maxTier
+    ? `<button class="btn small ghost tray-hull" onclick="openHullModal()">⊕ Expand Hull</button>` : '';
+  tray.innerHTML = `<div class="tray-msg">${msg}</div>${hullLink}`;
+}
+
+/* hull expansion — behind a confirmation so it isn't clicked by accident */
+function openHullModal() {
+  if (!GAME || hullTier() >= CONFIG.hull.maxTier) return;
+  const cost = hullCost(), afford = canExpandHull();
+  openModal(`<span class="close" onclick="closeModal()">×</span>
+    <h2>Expand Hull</h2>
+    <p class="muted">Weld on another bay column — module bays grow from <b>${maxRooms()}</b> to <b>${maxRooms() + 2}</b>. Permanent, and widens the ship.</p>
+    <div class="detail-row"><span>Cost</span><span class="u-cost">${cost} minerals</span></div>
+    <div class="detail-row"><span>You have</span><span>${fmt(GAME.resources.minerals)} minerals</span></div>
+    <div class="row-actions">
+      <button class="btn primary" ${afford ? '' : 'disabled'} onclick="confirmExpandHull()">Expand for ${cost} min</button>
+      <button class="btn" onclick="closeModal()">Cancel</button>
+    </div>`);
+}
+function confirmExpandHull() {
+  if (expandHull()) { shipRelayout(); closeModal(); renderAll(); }
 }
 
 /* build menu for a specific empty bay */
@@ -243,13 +264,6 @@ function renderControls() {
     synth.disabled = !canSynthFuel();
     synth.textContent = `Synth Fuel (${CONFIG.synth.waterPerFuel} water → ${CONFIG.synth.fuelPerClick})`;
     synth.title = 'Convert water into fuel — inefficient, but reliable';
-  }
-  const hull = $('#btn-hull');
-  if (hull) {
-    const maxed = hullTier() >= CONFIG.hull.maxTier;
-    hull.disabled = !canExpandHull();
-    hull.textContent = maxed ? 'Hull Maxed' : `Expand Hull (${hullCost()} min → +2 bays)`;
-    hull.title = `Widen the ship for more module bays (currently ${maxRooms()})`;
   }
   const si = $('#sector-info');
   if (si && GAME.stock) {
