@@ -122,10 +122,11 @@ function resMeter(res) {
   const rcls = rate > 0.05 ? 'up' : rate < -0.05 ? 'down' : '';
   // CO₂ is a hazard meter: full = bad, so flip the rate colours and warn near the top
   const danger = m.hazard && pct >= CONFIG.needs.co2Danger * 100;
+  const rateCls = m.hazard ? (rate > 0.05 ? 'down' : rate < -0.05 ? 'up' : '') : rcls;
   return `<div class="res ${m.cls} ${danger ? 'danger' : ''}" data-res="${res}">
-    <div class="res-top"><span>${m.label}</span><span class="res-val">${fmt(val)}<span class="muted">/${fmt(max)}</span></span></div>
+    <div class="res-label">${m.label}</div>
+    <div class="res-line"><span class="res-val">${fmt(val)}<span class="res-max">/${fmt(max)}</span></span><span class="rate ${rateCls}">${fmtRate(rate)}</span></div>
     <div class="bar"><i style="width:${pct}%"></i></div>
-    <div class="rate ${m.hazard ? (rate > 0.05 ? 'down' : rate < -0.05 ? 'up' : '') : rcls}">${fmtRate(rate)}</div>
   </div>`;
 }
 function renderTop() {

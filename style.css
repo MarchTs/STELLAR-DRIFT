@@ -47,18 +47,20 @@ body {
 .brand h1 { font-size: 17px; letter-spacing: 3px; margin: 0; font-weight: 700; }
 .brand .sub { color: var(--muted); font-size: 12px; letter-spacing: 1px; }
 
-.resources { display: flex; gap: 12px; flex: 1; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
-.res-group { display: flex; flex-direction: column; gap: 4px; }
-.res-group-label { font-size: 9px; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; text-align: center; }
-.res-row { display: flex; gap: 5px; }
-.res {
-  min-width: 76px; background: var(--bg2); border: 1px solid var(--line);
-  border-radius: 8px; padding: 5px 8px;
-}
-.res .res-top { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; color: var(--muted); letter-spacing: .3px; }
-.res .res-val { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); font-size: 11px; }
-.res .bar { height: 5px; border-radius: 4px; background: #0c1322; margin-top: 5px; overflow: hidden; }
-.res .bar > i { display: block; height: 100%; border-radius: 4px; transition: width .2s linear; }
+/* flat, low-clutter resource readout: groups separated by hairline dividers */
+.resources { display: flex; flex: 1; flex-wrap: wrap; justify-content: center; align-items: center; }
+.res-group { display: flex; flex-direction: column; gap: 5px; padding: 0 16px; }
+.res-group:not(:first-child) { border-left: 1px solid var(--line); }
+.res-group-label { font-size: 8px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; opacity: .65; text-align: center; }
+.res-row { display: flex; gap: 16px; }
+.res { min-width: 58px; cursor: help; }
+.res .res-label { font-size: 9px; color: var(--muted); letter-spacing: .3px; }
+.res .res-line { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.res .res-val { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; color: var(--text); }
+.res .res-max { color: var(--muted); font-weight: 400; font-size: 9px; }
+.res .rate { font-size: 9px; }
+.res .bar { height: 3px; border-radius: 3px; background: #0c1322; margin-top: 3px; overflow: hidden; }
+.res .bar > i { display: block; height: 100%; border-radius: 3px; transition: width .2s linear; }
 .res.power .bar > i { background: var(--power); }
 .res.oxygen .bar > i { background: var(--oxygen); }
 .res.co2 .bar > i { background: var(--co2); }
@@ -67,9 +69,7 @@ body {
 .res.minerals .bar > i { background: var(--minerals); }
 .res.food .bar > i { background: var(--food); }
 .res.fuel .bar > i { background: var(--fuel); }
-.res.danger { border-color: var(--bad); box-shadow: 0 0 8px rgba(255,107,107,.4); }
-.res { cursor: help; }
-.res .rate { font-size: 10px; min-height: 12px; }
+.res.danger .res-val { color: var(--bad); }
 .rate.up { color: var(--good); } .rate.down { color: var(--bad); }
 
 /* resource flow breakdown tooltip */
