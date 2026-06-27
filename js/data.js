@@ -296,12 +296,19 @@ const EVENT_DEFS = [
 // meltMult (ice->water rate), crewDmg (health lost/sec), stockMult (resource stock).
 // ------------------------------------------------------------
 const CONDITIONS = {
-  calm:       { name: 'Calm Space',  icon: '·', tone: 'good', desc: 'Quiet space. Nothing unusual.' },
-  rich:       { name: 'Ore-Rich',    icon: '◆', tone: 'good', stockMult: 1.7, desc: 'Dense ore & ice fields — a far bigger haul to mine.' },
-  scorching:  { name: 'Scorching',   icon: '🔥', tone: 'bad',  powerDrawMult: 1.6, desc: 'Stellar heat — modules run hot and draw +60% power.' },
-  frozen:     { name: 'Frozen',      icon: '❄', tone: 'bad',  meltMult: 0.25, desc: 'Deep cold — ice barely melts (water reclaim −75%).' },
-  irradiated: { name: 'Irradiated',  icon: '☢', tone: 'bad',  crewDmg: 0.3,   desc: 'Hard radiation slowly wounds the crew.' },
-  nebula:     { name: 'Ion Nebula',  icon: '≈', tone: 'bad',  reactorMult: 0.65, desc: 'Ion interference cuts reactor output −35%.' },
+  calm:       { name: 'Calm Space',  icon: '·', tone: 'good',
+    desc: 'Quiet space. Nothing unusual.' },
+  rich:       { name: 'Ore-Rich',    icon: '◆', tone: 'good', stockMult: 1.7,
+    desc: 'Dense ore & ice fields — a far bigger haul, with no hazard.', reward: '+70% sector stock' },
+  // high risk / high reward — each hazard pays off in resources
+  scorching:  { name: 'Scorching',   icon: '🔥', tone: 'risk', powerDrawMult: 1.6, yieldMult: 1.7, stockMult: 1.3,
+    desc: 'Stellar heat — modules draw +60% power.', reward: '+70% mining yield · +30% stock' },
+  frozen:     { name: 'Frozen',      icon: '❄', tone: 'risk', meltMult: 0.25, stockMult: 1.9, yieldMult: 1.3,
+    desc: 'Deep cold — ice barely melts (water reclaim −75%).', reward: '+90% stock · +30% yield' },
+  irradiated: { name: 'Irradiated',  icon: '☢', tone: 'risk', crewDmg: 0.3, stockMult: 1.6, yieldMult: 1.6,
+    desc: 'Hard radiation slowly wounds the crew.', reward: '+60% mining yield · +60% stock' },
+  nebula:     { name: 'Ion Nebula',  icon: '≈', tone: 'risk', reactorMult: 0.65, stockMult: 1.5, salvageFuel: 25, salvageMinerals: 70,
+    desc: 'Ion interference cuts reactor output −35%.', reward: 'salvage on arrival: +25 fuel, +70 ore · +50% stock' },
 };
 const BAD_CONDITIONS = ['scorching', 'frozen', 'irradiated', 'nebula'];
 

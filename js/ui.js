@@ -286,9 +286,10 @@ function openJumpModal() {
   const cost = jumpFuelCost();
   const cards = jumpOptions.map((o, i) => {
     const c = CONDITIONS[o.condition];
-    return `<div class="upg">
-      <div class="u-top"><span class="u-name">${c.icon} ${c.name}</span><span class="u-cat">Sector ${o.sector}</span></div>
-      <div class="u-desc cond-${c.tone}">${c.desc}</div>
+    return `<div class="upg ${c.tone === 'risk' ? 'risk-card' : ''}">
+      <div class="u-top"><span class="u-name cond-${c.tone}">${c.icon} ${c.name}</span><span class="u-cat">Sector ${o.sector}</span></div>
+      <div class="u-desc">${c.desc}</div>
+      ${c.reward ? `<div class="reward-line">★ Reward: ${c.reward}</div>` : ''}
       <div class="u-blurb">Stock: <b style="color:var(--minerals)">${fmt(o.stock.minerals)}</b> ore · <b style="color:var(--ice)">${fmt(o.stock.ice)}</b> ice</div>
       <div class="u-foot"><span class="u-cost" style="color:var(--fuel)">${cost} fuel</span>
         <button class="btn small primary" onclick="confirmJump(${i})">Jump here</button></div>

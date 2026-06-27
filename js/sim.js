@@ -110,7 +110,7 @@ function step(dt) {
 
   // 5. MINING (minerals + ice from finite sector stock) & FOOD (water+O2 -> food)
   if (powered) {
-    const mineMult = 1 + (GAME.sector - 1) * CONFIG.jump.mineralBonusPerSector;
+    const mineMult = (1 + (GAME.sector - 1) * CONFIG.jump.mineralBonusPerSector) * condMod('yieldMult', 1);
     roomsOfType('extractor').forEach(r => {
       const staff = staffOn(r.id);
       if (staff <= 0) return;
@@ -268,6 +268,8 @@ function doJumpTo(opt) {
   GAME.condition = opt.condition;
   GAME.nextEventIn = Math.min(GAME.nextEventIn, 12);
   const c = CONDITIONS[opt.condition];
+  if (c.salvageFuel) GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + c.salvageFuel);
+  if (c.salvageMinerals) GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + c.salvageMinerals);
   logMsg(`Jumped to Sector ${opt.sector} — ${c.name}. ${c.desc}`, c.tone === 'good' ? 'good' : 'warn');
   saveGame();
   return true;

@@ -179,6 +179,9 @@ body {
 .sector-info .si-cond { font-weight: 600; padding: 1px 6px; border-radius: 10px; border: 1px solid var(--line); }
 .cond-good { color: var(--good); }
 .cond-bad { color: var(--warn); }
+.cond-risk { color: var(--fuel); }
+.reward-line { font-size: 11px; color: var(--good); margin: 4px 0 2px; }
+.upg.risk-card { border-color: #5a432a; box-shadow: inset 3px 0 0 var(--fuel); }
 .tray-msg { font-size: 12px; color: var(--muted); padding: 4px 2px; flex: 1; }
 .tray-hull { font-size: 11px; opacity: .7; }
 .tray-hull:hover { opacity: 1; }
