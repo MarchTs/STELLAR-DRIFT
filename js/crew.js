@@ -98,9 +98,10 @@ function jobNeed(c, r) {
   return (JOB_WEIGHT[r.type] || 1) * (1 - frac);
 }
 
+const MULTI_CREW_ROOMS = new Set(['quarters', 'messhall']);
+
 // Role-less, demand-driven: a crew operates whichever module most needs a body.
-// Dividing by OTHER crew assigned spreads them out (excluding self so the current
-// job isn't self-penalised); a continuity bonus keeps a crew put to avoid thrashing.
+// Production rooms are single-operator; only quarters and mess hall accept many.
 function pickWorkRoom(c) {
   let best = null, bestScore = 0;
   GAME.rooms.forEach(r => {
@@ -108,6 +109,7 @@ function pickWorkRoom(c) {
     if (need <= 0) return;
     const here = c.roomId === r.id;
     const others = assignedOn(r.id) - (here ? 1 : 0);
+    if (!MULTI_CREW_ROOMS.has(r.type) && others >= 1) return;  // room full
     let score = need / (others + 1);
     if (here) score *= 1.6;                  // stickiness: don't abandon a job that still needs work
     if (score > bestScore) { bestScore = score; best = r; }
