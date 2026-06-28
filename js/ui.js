@@ -724,7 +724,7 @@ function handleEventChoice(logIndex, action) {
     GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + entry.cacheMineral);
     GAME.resources.scrap    = Math.min(cap(GAME, 'scrap'),    GAME.resources.scrap    + entry.cacheScrap);
     aliveCrew().forEach(c => { c.needs.morale = Math.max(0, c.needs.morale - 15); });
-    logMsg(`Took everything from the cache. ${entry.fullLoot}. Crew felt uneasy about it.`, 'bad');
+    logMsg(`Took everything from the cache: ${entry.cacheMineral} minerals + ${entry.cacheScrap} scrap. Crew felt uneasy about it.`, 'bad');
   } else if (action === 'cacheFuel') {
     GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + 20);
     logMsg('Took only the fuel from the cache. +20 fuel.', 'good');
