@@ -91,6 +91,8 @@ function loadGame() {
         c.specialty = sp; c.color = SKILLS[sp].color;
         delete c.role; delete c.skillLevel; delete c.xp;
       }
+      if (!c.needs) c.needs = { hunger: 80, energy: 90, health: c.health ?? 100, morale: 80 };
+      if (!c.id) c.id = 'c' + Math.floor(Math.random() * 1e9).toString(36);
     });
     // backfill any resources / sector stock added in later versions
     if (GAME && GAME.resources) {

@@ -286,7 +286,7 @@ function renderCrew() {
       <div class="crew-top">
         <div><span class="crew-name">${c.name}</span></div>
         ${dead
-          ? `<button class="btn small eject-btn" onclick="ejectCrew('${c.id}')">⏏ Eject</button>`
+          ? `<button class="btn small eject-btn" data-eject="${c.id}">⏏ Eject</button>`
           : `<span class="crew-state ${c.state}">${c.state}</span>`}
       </div>
       ${dead ? '' : `<div class="crew-skills">${skillChips}</div>
@@ -672,7 +672,7 @@ function handleEventChoice(logIndex, action) {
     GAME.resources.minerals = Math.max(0, GAME.resources.minerals - mineralLost);
 
     aliveCrew().forEach(c => {
-      c.health = Math.max(0, c.health - crewDamage);
+      c.needs.health = Math.max(0, c.needs.health - crewDamage);
     });
 
     logMsg(`Fought the pirates! Lost ${fuelLost} fuel, ${mineralLost} minerals, and crew took ${crewDamage} damage.`, 'bad');
