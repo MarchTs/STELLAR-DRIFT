@@ -339,21 +339,21 @@ const EVENT_DEFS = [
     desc: 'A welcome haul of scrap, fuel and ice from derelict vessels.',
   },
   {
-    id: 'fuel_shortage', name: 'Stranded Vessel', weight: 2, minSector: 1, bad: false,
-    msg: (st, ev) => `A drifting ship hails you — they have ${ev.fuelAvailable} fuel to sell at ${ev.pricePerUnit} minerals each (up to 20 units).`,
+    id: 'fuel_shortage', name: 'Fuel Running Low', weight: 2, minSector: 1, bad: false,
+    msg: (st, ev) => `Fuel reserves critically low — sensors flag a nearby trader willing to sell at ${ev.pricePerUnit} minerals per unit.`,
     apply: (st, ev) => {
       ev.duration = 1;
       ev.fuelAvailable = 20;
       ev.pricePerUnit = Math.floor(3 + st.sector * 1.5);
       ev.hasChoices = true;
       ev.choices = [
-        { id: 'buy_5',  label: `Buy 5 fuel (${Math.floor((3 + st.sector * 1.5) * 5)} minerals)`,  action: 'buyFuel5' },
-        { id: 'buy_10', label: `Buy 10 fuel (${Math.floor((3 + st.sector * 1.5) * 10)} minerals)`, action: 'buyFuel10' },
-        { id: 'buy_20', label: `Buy 20 fuel (${Math.floor((3 + st.sector * 1.5) * 20)} minerals)`, action: 'buyFuel20' },
-        { id: 'ignore', label: 'Ignore',                                                             action: 'ignoreFuel' },
+        { id: 'buy_5',  label: `Purchase 5 fuel (${Math.floor((3 + st.sector * 1.5) * 5)} minerals)`,  action: 'buyFuel5' },
+        { id: 'buy_10', label: `Purchase 10 fuel (${Math.floor((3 + st.sector * 1.5) * 10)} minerals)`, action: 'buyFuel10' },
+        { id: 'buy_20', label: `Purchase 20 fuel (${Math.floor((3 + st.sector * 1.5) * 20)} minerals)`, action: 'buyFuel20' },
+        { id: 'ignore', label: 'Continue without buying',                                                action: 'ignoreFuel' },
       ];
     },
-    desc: 'A stranded vessel offers to sell you fuel at a premium. Handy if you\'re running low.',
+    desc: 'Your fuel is dangerously low. A nearby trader can resupply you — at a premium.',
   },
   {
     id: 'space_pirate', name: 'Space Pirates', weight: 2, minSector: 2, bad: true,

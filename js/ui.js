@@ -648,11 +648,11 @@ function handleEventChoice(logIndex, action) {
     }
     GAME.resources.minerals -= price;
     GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + fuelBuyQty);
-    logMsg(`Bought ${fuelBuyQty} fuel for ${price} minerals from the stranded ship.`, 'good');
+    logMsg(`Purchased ${fuelBuyQty} fuel for ${price} minerals from the trader.`, 'good');
     entry.hasChoices = false; entry.choices = [];
     _forceCloseModal(); renderAll(); saveGame(); return;
   } else if (action === 'ignoreFuel') {
-    logMsg('You left the stranded ship behind.', 'info');
+    logMsg('Continued on without buying fuel.', 'info');
     entry.hasChoices = false; entry.choices = [];
     _forceCloseModal(); renderAll(); saveGame(); return;
   }
