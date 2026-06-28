@@ -44,7 +44,22 @@ function spawnEvent() {
     GAME.events.push(ev);
   }
   const msg = typeof chosen.msg === 'function' ? chosen.msg(GAME, ev) : chosen.msg;
-  logMsg(msg, chosen.bad === false ? 'good' : 'bad');
+  const logExtra = { eventId: chosen.id };
+  if (ev.hasChoices) {
+    logExtra.hasChoices = ev.hasChoices;
+    logExtra.choices = ev.choices;
+    // persist data needed to resolve the choice after the event object is gone
+    if (ev.pricePerUnit  !== undefined) logExtra.pricePerUnit  = ev.pricePerUnit;
+    if (ev.bribeAmount   !== undefined) logExtra.bribeAmount   = ev.bribeAmount;
+    if (ev.foodCost      !== undefined) logExtra.foodCost      = ev.foodCost;
+    if (ev.waterCost     !== undefined) logExtra.waterCost     = ev.waterCost;
+    if (ev.survivorCount !== undefined) logExtra.survivorCount = ev.survivorCount;
+    if (ev.podContents   !== undefined) logExtra.podContents   = ev.podContents;
+    if (ev.minerals      !== undefined) logExtra.cacheMineral  = ev.minerals;
+    if (ev.scrap         !== undefined) logExtra.cacheScrap    = ev.scrap;
+    if (ev.fullLoot      !== undefined) logExtra.fullLoot      = ev.fullLoot;
+  }
+  logMsg(msg, chosen.bad === false ? 'good' : 'bad', logExtra);
 
   // schedule next, scaled by sector depth and the run's challenge
   const scale = 1 / (1 + (GAME.sector - 1) * CONFIG.jump.eventRateScale) / chMod('eventRateMult', 1);

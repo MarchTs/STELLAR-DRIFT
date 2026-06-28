@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stellar Drift</title>
-  <link rel="stylesheet" href="style.css?v=49" />
+  <link rel="stylesheet" href="style.css?v=59" />
 </head>
 <body>
   <div id="app">
@@ -32,7 +32,7 @@
           <div class="pane-actions">
             <div id="sector-info" class="sector-info"></div>
             <button id="btn-synth" class="btn small">Synth Fuel</button>
-            <button id="btn-trade" class="btn small hidden" style="color:var(--warn);border-color:rgba(255,206,92,.4)">◉ Trade</button>
+            <button id="btn-comm" class="btn small" style="color:var(--accent);border-color:rgba(92,200,255,.4)" onclick="openCommModal()">📡 Comm</button>
             <button id="btn-jump" class="btn small">Jump ⟶</button>
           </div>
         </div>
@@ -43,10 +43,17 @@
         <div id="build-tray" class="build-tray"></div>
       </section>
 
-      <!-- Crew -->
+      <!-- Crew / Storage -->
       <section id="crew-pane" class="pane">
-        <div class="pane-head"><h2>Crew</h2><span id="crew-count" class="muted"></span></div>
+        <div class="pane-head">
+          <div class="crew-tabs">
+            <button class="crew-tab active" id="ctab-crew" onclick="switchCrewTab('crew')">Crew</button>
+            <button class="crew-tab" id="ctab-storage" onclick="switchCrewTab('storage')">Storage</button>
+          </div>
+          <span id="crew-count" class="muted"></span>
+        </div>
         <div id="crew-list" class="crew-list"></div>
+        <div id="storage-panel" class="storage-panel hidden"></div>
       </section>
     </main>
 
@@ -65,16 +72,16 @@
   <!-- Resource flow breakdown tooltip -->
   <div id="res-tip" class="res-tip hidden"></div>
 
-  <script src="js/data.js?v=49"></script>
-  <script src="js/state.js?v=49"></script>
-  <script src="js/meta.js?v=49"></script>
-  <script src="js/helpers.js?v=49"></script>
-  <script src="js/rooms.js?v=49"></script>
-  <script src="js/crew.js?v=49"></script>
-  <script src="js/events.js?v=49"></script>
-  <script src="js/sim.js?v=49"></script>
-  <script src="js/ui.js?v=49"></script>
-  <script src="js/ship.js?v=49"></script>
-  <script src="js/main.js?v=49"></script>
+  <script src="js/data.js?v=59"></script>
+  <script src="js/state.js?v=59"></script>
+  <script src="js/meta.js?v=59"></script>
+  <script src="js/helpers.js?v=59"></script>
+  <script src="js/rooms.js?v=59"></script>
+  <script src="js/crew.js?v=59"></script>
+  <script src="js/events.js?v=59"></script>
+  <script src="js/sim.js?v=59"></script>
+  <script src="js/ui.js?v=59"></script>
+  <script src="js/ship.js?v=59"></script>
+  <script src="js/main.js?v=59"></script>
 </body>
 </html>
