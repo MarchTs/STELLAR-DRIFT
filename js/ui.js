@@ -658,7 +658,8 @@ function handleEventChoice(logIndex, action) {
   }
 
   if (action === 'payPirateBribe') {
-    const minCost = Math.min(entry.bribeAmount, GAME.resources.minerals);
+    const bribeAmt = entry.bribeAmount ?? Math.floor(20 + GAME.sector * 5);
+    const minCost = Math.min(bribeAmt, GAME.resources.minerals);
     GAME.resources.minerals -= minCost;
     logMsg(`Paid ${minCost} minerals to the pirates. They departed.`, 'bad');
   } else if (action === 'fightPirates') {
