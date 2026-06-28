@@ -285,8 +285,10 @@ const ROOM_ATTRS = {
       hint: (l) => `power draw −${_pct(l)}%` },
   ],
   manufactor: [
-    { key: 'efficiency', name: 'Processing Rate', kind: 'mult', base: 24, max: 10,
-      hint: (l) => `+${_r((A_MULT(l) - 1) * 100)}% conversion speed (base 1.0/tick)` },
+    { key: 'efficiency',     name: 'Processing Rate',  kind: 'mult', base: 24, max: 10,
+      hint: (l) => `+${_r((A_MULT(l) - 1) * 100)}% conversion speed` },
+    { key: 'mineralstorage', name: 'Mineral Storage',  kind: 'mult', base: 20, max: 8,
+      hint: (l) => `+${(l - 1) * 50} mineral cap (+50 per level)` },
   ],
 };
 
