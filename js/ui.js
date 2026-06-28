@@ -598,15 +598,30 @@ function openCommModal() {
   // mark as opened — cannot be re-opened without choosing
   entry.commOpened = true;
 
+  const defaultAction = _defaultEncounterAction(entry.eventId);
+  const secsLeft = () => Math.max(0, Math.ceil(ENCOUNTER_TIMEOUT_S - (GAME.time - (entry.spawnedAt ?? GAME.time))));
+
   const choiceBtns = entry.choices.map(ch =>
     `<button class="btn" style="margin:4px 0;width:100%" onclick="handleEventChoice(${logIndex}, '${ch.action}')">${ch.label}</button>`
   ).join('');
 
   // no × close button, no ignore — must choose; backdrop click blocked
   openModal(`<h2 style="margin-top:0">📡 Incoming Transmission</h2>
-    <p style="color:var(--text);margin:12px 0 20px">${entry.text}</p>
+    <p style="color:var(--muted);font-size:11px;margin:0 0 4px">⏱ <span id="comm-countdown">${secsLeft()}</span>s to respond${defaultAction ? ' or auto-resolve' : ''}</p>
+    <p style="color:var(--text);margin:8px 0 20px">${entry.text}</p>
     <div style="display:flex;flex-direction:column;gap:6px">${choiceBtns}</div>`,
     { lockClose: true });
+
+  if (_commTimerInterval) { clearInterval(_commTimerInterval); _commTimerInterval = null; }
+  _commTimerInterval = setInterval(() => {
+    const r = secsLeft();
+    const el = document.getElementById('comm-countdown');
+    if (el) { el.textContent = r; el.style.color = r <= 10 ? 'var(--danger,#f55)' : ''; }
+    if (r <= 0 && defaultAction) {
+      clearInterval(_commTimerInterval); _commTimerInterval = null;
+      handleEventChoice(logIndex, defaultAction);
+    }
+  }, 1000);
 }
 
 /* ============================================================
@@ -716,6 +731,7 @@ function handleEventChoice(logIndex, action) {
 
 function renderAll() {
   if (!GAME) return;
+  checkEncounterExpiry();
   renderTop();
   renderShip();
   if (crewPaneTab === 'crew') renderCrew();
@@ -728,6 +744,27 @@ function renderAll() {
    Modals
    ============================================================ */
 let _commModalOpen = false;
+let _commTimerInterval = null;
+
+const ENCOUNTER_TIMEOUT_S = 60;
+
+function _defaultEncounterAction(eventId) {
+  return { space_pirate: 'fightPirates', fuel_shortage: 'ignoreFuel',
+           distress_signal: 'ignoreSignal', abandoned_station: 'passStation',
+           cargo_pod: 'ignorePod', smuggler_cache: 'leaveCache' }[eventId] || null;
+}
+
+function checkEncounterExpiry() {
+  GAME.log.forEach((entry, i) => {
+    if (!entry.hasChoices || entry.spawnedAt === undefined) return;
+    if (GAME.time - entry.spawnedAt < ENCOUNTER_TIMEOUT_S) return;
+    const action = _defaultEncounterAction(entry.eventId);
+    if (!action) return;
+    if (_commModalOpen) _forceCloseModal();
+    handleEventChoice(i, action);
+  });
+}
+
 function openModal(html, opts = {}) {
   _commModalOpen = !!opts.lockClose;
   $('#modal-card').innerHTML = `<div class="modal-pad">${html}</div>`;
@@ -739,6 +776,7 @@ function closeModal() {
 }
 function _forceCloseModal() {
   _commModalOpen = false;
+  if (_commTimerInterval) { clearInterval(_commTimerInterval); _commTimerInterval = null; }
   $('#modal').classList.add('hidden');
 }
 

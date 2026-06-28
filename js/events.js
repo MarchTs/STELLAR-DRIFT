@@ -48,6 +48,7 @@ function spawnEvent() {
   if (ev.hasChoices) {
     logExtra.hasChoices = ev.hasChoices;
     logExtra.choices = ev.choices;
+    logExtra.spawnedAt = GAME.time;   // for 60-second response timer
     // persist data needed to resolve the choice after the event object is gone
     if (ev.pricePerUnit  !== undefined) logExtra.pricePerUnit  = ev.pricePerUnit;
     if (ev.bribeAmount   !== undefined) logExtra.bribeAmount   = ev.bribeAmount;
