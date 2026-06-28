@@ -323,11 +323,19 @@ function renderControls() {
   }
   const comm = $('#btn-comm');
   if (comm) {
-    const hasEncounter = GAME.log.some(e => e.hasChoices);
+    const pendingEntry = GAME.log.find(e => e.hasChoices);
+    const hasEncounter = !!pendingEntry;
     const atStation = GAME.atStation;
     comm.disabled = !hasEncounter && !atStation;
     comm.classList.toggle('flash', hasEncounter);
-    comm.textContent = atStation && !hasEncounter ? '◉ Trade' : '📡 Comm';
+    if (atStation && !hasEncounter) {
+      comm.textContent = '◉ Trade';
+    } else if (hasEncounter && pendingEntry.spawnedAt !== undefined) {
+      const secs = Math.max(0, Math.ceil(ENCOUNTER_TIMEOUT_S - (GAME.time - pendingEntry.spawnedAt)));
+      comm.textContent = `📡 Comm ${secs}s`;
+    } else {
+      comm.textContent = '📡 Comm';
+    }
   }
   const si = $('#sector-info');
   if (si && GAME.stock) {
