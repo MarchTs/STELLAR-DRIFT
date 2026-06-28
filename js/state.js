@@ -105,8 +105,10 @@ function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
 /* ----------------------------------------------------------
    Logging
    ---------------------------------------------------------- */
-function logMsg(text, kind) {
-  GAME.log.unshift({ t: GAME.time, text, kind: kind || 'info' });
+function logMsg(text, kind, extra) {
+  const entry = { t: GAME.time, text, kind: kind || 'info' };
+  if (extra) Object.assign(entry, extra);
+  GAME.log.unshift(entry);
   if (GAME.log.length > 40) GAME.log.length = 40;
 }
 

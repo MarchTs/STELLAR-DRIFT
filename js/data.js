@@ -338,6 +338,106 @@ const EVENT_DEFS = [
     },
     desc: 'A welcome haul of scrap, fuel and ice from derelict vessels.',
   },
+  {
+    id: 'fuel_shortage', name: 'Stranded Vessel', weight: 2, minSector: 1, bad: false,
+    msg: (st, ev) => `A drifting ship hails you — they have ${ev.fuelAvailable} fuel to sell at ${ev.pricePerUnit} minerals each (up to 20 units).`,
+    apply: (st, ev) => {
+      ev.duration = 1;
+      ev.fuelAvailable = 20;
+      ev.pricePerUnit = Math.floor(3 + st.sector * 1.5);
+      ev.hasChoices = true;
+      ev.choices = [
+        { id: 'buy_5',  label: `Buy 5 fuel (${Math.floor((3 + st.sector * 1.5) * 5)} minerals)`,  action: 'buyFuel5' },
+        { id: 'buy_10', label: `Buy 10 fuel (${Math.floor((3 + st.sector * 1.5) * 10)} minerals)`, action: 'buyFuel10' },
+        { id: 'buy_20', label: `Buy 20 fuel (${Math.floor((3 + st.sector * 1.5) * 20)} minerals)`, action: 'buyFuel20' },
+        { id: 'ignore', label: 'Ignore',                                                             action: 'ignoreFuel' },
+      ];
+    },
+    desc: 'A stranded vessel offers to sell you fuel at a premium. Handy if you\'re running low.',
+  },
+  {
+    id: 'space_pirate', name: 'Space Pirates', weight: 2, minSector: 2, bad: true,
+    msg: (st, ev) => `Space pirates have locked onto your vessel! They demand ${ev.bribeAmount} minerals as tribute.`,
+    apply: (st, ev) => {
+      ev.duration = 1;
+      const bribeAmount = Math.floor(20 + st.sector * 5);
+      ev.bribeAmount = bribeAmount;
+      ev.hasChoices = true;
+      ev.choices = [
+        { id: 'pay_bribe', label: `Pay ${bribeAmount} minerals`, action: 'payPirateBribe' },
+        { id: 'refuse_bribe', label: 'Refuse & Fight', action: 'fightPirates' }
+      ];
+    },
+    desc: 'Pirates demand a bribe in minerals or they will attack.',
+  },
+  {
+    id: 'distress_signal', name: 'Distress Signal', weight: 2, minSector: 1, bad: false,
+    msg: (st, ev) => `A distress signal — ${ev.survivorCount} survivors stranded after an engine failure. They need food and water.`,
+    apply: (st, ev) => {
+      ev.duration = 1;
+      ev.survivorCount = 2 + Math.floor(rngFloat() * 3);
+      const foodCost = ev.survivorCount * 8;
+      const waterCost = ev.survivorCount * 5;
+      ev.foodCost = foodCost; ev.waterCost = waterCost;
+      ev.hasChoices = true;
+      ev.choices = [
+        { id: 'rescue_full', label: `Rescue all (${foodCost} food, ${waterCost} water → +30 morale, +25 minerals)`, action: 'rescueFull' },
+        { id: 'rescue_drop', label: `Drop supplies only (${Math.floor(foodCost/2)} food → +10 morale)`, action: 'rescueDrop' },
+        { id: 'ignore_signal', label: 'Ignore signal (−20 morale)', action: 'ignoreSignal' },
+      ];
+    },
+    desc: 'Survivors need help. Rescue them for a morale boost; ignoring costs morale.',
+  },
+  {
+    id: 'abandoned_station', name: 'Derelict Station', weight: 2, minSector: 2, bad: false,
+    msg: 'Scanners pick up a derelict station — no life signs, but the cargo bays look intact.',
+    apply: (st, ev) => {
+      ev.duration = 1;
+      ev.hasChoices = true;
+      ev.choices = [
+        { id: 'survey_careful', label: 'Careful survey (+40 minerals, +30 scrap)', action: 'stationSurvey' },
+        { id: 'raid_fast',      label: 'Fast raid (+80 minerals, +60 scrap, +20 ore — risk hull breach)', action: 'stationRaid' },
+        { id: 'pass_station',   label: 'Pass by', action: 'passStation' },
+      ];
+    },
+    desc: 'A derelict station with loot. Safe survey or risky fast raid.',
+  },
+  {
+    id: 'cargo_pod', name: 'Drifting Cargo Pod', weight: 3, minSector: 1, bad: false,
+    msg: (st, ev) => `A sealed cargo pod drifts into sensor range — contents unknown, labelled Sector ${st.sector} freight.`,
+    apply: (st, ev) => {
+      ev.duration = 1;
+      // contents rotate by sector for determinism
+      const roll = st.sector % 3;
+      ev.podContents = roll === 0 ? { food: 40, label: '40 food' }
+                     : roll === 1 ? { minerals: 50, scrap: 20, label: '50 minerals + 20 scrap' }
+                     :              { fuel: 15, ice: 30, label: '15 fuel + 30 ice' };
+      ev.hasChoices = true;
+      ev.choices = [
+        { id: 'open_pod',  label: `Recover pod (${ev.podContents.label})`, action: 'openPod' },
+        { id: 'ignore_pod', label: 'Leave it', action: 'ignorePod' },
+      ];
+    },
+    desc: 'A mystery cargo pod — open it for free supplies.',
+  },
+  {
+    id: 'smuggler_cache', name: "Smuggler's Cache", weight: 2, minSector: 3, bad: false,
+    msg: (st, ev) => `Hidden beacon leads to a smuggler's cache — ${ev.fullLoot} in contraband goods or just take the fuel.`,
+    apply: (st, ev) => {
+      ev.duration = 1;
+      const minerals = 60 + st.sector * 10;
+      const scrap = 40 + st.sector * 8;
+      ev.fullLoot = `${minerals} minerals + ${scrap} scrap`;
+      ev.minerals = minerals; ev.scrap = scrap;
+      ev.hasChoices = true;
+      ev.choices = [
+        { id: 'take_all',  label: `Take everything (${ev.fullLoot}, −15 crew morale)`, action: 'cacheAll' },
+        { id: 'take_fuel', label: 'Take only the fuel (+20 fuel, crew stays clean)', action: 'cacheFuel' },
+        { id: 'leave_cache', label: 'Leave it untouched', action: 'leaveCache' },
+      ];
+    },
+    desc: "A smuggler's stash. Clean conscience or full hold — your call.",
+  },
 ];
 
 // ------------------------------------------------------------

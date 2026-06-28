@@ -34,16 +34,19 @@ const RES_META = {
   fuel:     { label: 'Fuel',     cls: 'fuel' },
 };
 
-// top bar groups: each group is a labelled cluster of resource meters
-const RES_GROUPS = [
-  { name: 'Power', keys: ['power'] },
+// Top bar: primary resource meters
+const RES_PRIMARY = [
+  { name: 'Power',        keys: ['power'] },
   { name: 'Life Support', keys: ['oxygen', 'co2'] },
-  { name: 'Storage', keys: ['food', 'water', 'ice', 'minerals', 'ore', 'scrap'] },
-  { name: 'Fuel', keys: ['fuel'] },
+  { name: 'Supplies',     keys: ['water', 'food', 'minerals'] },
+  { name: 'Fuel',         keys: ['fuel'] },
 ];
+// Storage panel resources (crew pane Storage tab — bulk/raw materials)
+const RES_STORAGE = ['ice', 'ore', 'scrap'];
 
 let lastRates = { power: 0, oxygen: 0, co2: 0, water: 0, ice: 0, minerals: 0, ore: 0, scrap: 0, food: 0, fuel: 0 };
-let hoveredRes = null;   // which resource meter the mouse is over (for the breakdown tooltip)
+let hoveredRes = null;
+let crewPaneTab = 'crew';
 
 /* ---------------- resource flow breakdown (for hover tooltip) ---------------- */
 // per-second sources (+) and sinks (-) for a resource, mirroring sim.js step().
@@ -136,7 +139,7 @@ function renderTop() {
   const cl = $('#challenge-label');
   if (cl) { const ch = challengeDef(); cl.textContent = ch.name; cl.className = `challenge-label cond-${ch.tone}`; cl.title = ch.desc; }
 
-  $('#resources').innerHTML = RES_GROUPS.map(g =>
+  $('#resources').innerHTML = RES_PRIMARY.map(g =>
     `<div class="res-group"><div class="res-group-label">${g.name}</div>
       <div class="res-row">${g.keys.map(resMeter).join('')}</div></div>`
   ).join('');
@@ -222,6 +225,35 @@ function doBuildInBay(type, bay) {
   if (buildRoom(type, bay)) { renderAll(); closeModal(); }
 }
 
+/* ---------------- crew pane tabs ---------------- */
+function switchCrewTab(tab) {
+  crewPaneTab = tab;
+  $('#ctab-crew').classList.toggle('active', tab === 'crew');
+  $('#ctab-storage').classList.toggle('active', tab === 'storage');
+  $('#crew-list').classList.toggle('hidden', tab !== 'crew');
+  $('#storage-panel').classList.toggle('hidden', tab !== 'storage');
+  if (tab === 'storage') renderStoragePanel();
+  if (tab === 'crew') renderCrew();
+}
+
+function renderStoragePanel() {
+  $('#storage-panel').innerHTML = RES_STORAGE.map(res => {
+    const m = RES_META[res];
+    const val = GAME.resources[res], max = cap(GAME, res);
+    const pct = clamp((val / max) * 100, 0, 100);
+    const rate = lastRates[res] || 0;
+    const rateCls = rate > 0.05 ? 'up' : rate < -0.05 ? 'down' : '';
+    const rateStr = Math.abs(rate) >= 0.05 ? `<span class="sr-rate ${rateCls}">${rate > 0 ? '+' : ''}${rate.toFixed(1)}/s</span>` : '';
+    const danger = m.hazard && pct >= CONFIG.needs.co2Danger * 100;
+    return `<div class="stor-row ${danger ? 'danger' : ''}">
+      <span class="stor-label ${m.cls}">${m.label}</span>
+      <div class="stor-bar"><i style="width:${pct}%" class="${m.cls}"></i></div>
+      <span class="stor-val">${fmt(val)}<span class="stor-max">/${fmt(max)}</span></span>
+      ${rateStr}
+    </div>`;
+  }).join('');
+}
+
 /* ---------------- crew ---------------- */
 function needRow(label, cls, val, max) {
   const pct = clamp((val / (max || 100)) * 100, 0, 100);
@@ -229,6 +261,16 @@ function needRow(label, cls, val, max) {
   return `<div class="need ${cls} ${low}"><span class="nlabel">${label}</span>
     <span class="nbar"><i style="width:${pct}%"></i></span></div>`;
 }
+function ejectCrew(id) {
+  const idx = GAME.crew.findIndex(c => c.id === id && c.state === 'dead');
+  if (idx === -1) return;
+  const name = GAME.crew[idx].name;
+  GAME.crew.splice(idx, 1);
+  logMsg(`${name} was ejected into space.`, 'info');
+  renderAll();
+  saveGame();
+}
+
 function renderCrew() {
   $('#crew-count').textContent = `${aliveCrew().length} alive`;
   const list = $('#crew-list');
@@ -243,7 +285,9 @@ function renderCrew() {
     return `<div class="crew ${dead ? 'dead' : ''}" style="--role:${c.color}">
       <div class="crew-top">
         <div><span class="crew-name">${c.name}</span></div>
-        <span class="crew-state ${c.state}">${dead ? '☠ dead' : c.state}</span>
+        ${dead
+          ? `<button class="btn small eject-btn" onclick="ejectCrew('${c.id}')">⏏ Eject</button>`
+          : `<span class="crew-state ${c.state}">${c.state}</span>`}
       </div>
       ${dead ? '' : `<div class="crew-skills">${skillChips}</div>
       <div class="needs">
@@ -258,9 +302,10 @@ function renderCrew() {
 
 /* ---------------- log ---------------- */
 function renderLog() {
-  $('#log').innerHTML = GAME.log.map(e =>
-    `<div class="entry"><span class="ts">${fmtTime(e.t)}</span><span class="${e.kind}">${e.text}</span></div>`
-  ).join('');
+  $('#log').innerHTML = GAME.log.map(e => {
+    const pending = e.hasChoices ? ' <span style="color:var(--accent);font-size:10px">▸ Comm</span>' : '';
+    return `<div class="entry"><div><span class="ts">${fmtTime(e.t)}</span><span class="${e.kind}">${e.text}${pending}</span></div></div>`;
+  }).join('');
 }
 
 /* ---------------- buttons state ---------------- */
@@ -276,8 +321,14 @@ function renderControls() {
     synth.textContent = `Synth Fuel (${CONFIG.synth.waterPerFuel} water → ${CONFIG.synth.fuelPerClick})`;
     synth.title = 'Convert water into fuel — inefficient, but reliable';
   }
-  const trade = $('#btn-trade');
-  if (trade) trade.classList.toggle('hidden', !GAME.atStation);
+  const comm = $('#btn-comm');
+  if (comm) {
+    const hasEncounter = GAME.log.some(e => e.hasChoices);
+    const atStation = GAME.atStation;
+    comm.disabled = !hasEncounter && !atStation;
+    comm.classList.toggle('flash', hasEncounter);
+    comm.textContent = atStation && !hasEncounter ? '◉ Trade' : '📡 Comm';
+  }
   const si = $('#sector-info');
   if (si && GAME.stock) {
     const sdBadge = GAME.sd > 0 ? `<span class="si-stock" style="color:var(--warn)">◈ ${GAME.sd} SD</span>` : '';
@@ -527,11 +578,148 @@ function tradeStation(dir, res, amount) {
   openStationModal();
 }
 
+/* ============================================================
+   Comm modal — shows pending encounter choices
+   ============================================================ */
+function openCommModal() {
+  const hasEncounter = GAME.log.some(e => e.hasChoices);
+
+  // at station with no pending encounter → open trade
+  if (GAME.atStation && !hasEncounter) {
+    stationPrices = stationPrices || generateStationPrices();
+    openStationModal();
+    return;
+  }
+
+  const pending = GAME.log.map((e, i) => ({ e, i })).filter(({ e }) => e.hasChoices && e.choices);
+  if (!pending.length) return;
+  const { e: entry, i: logIndex } = pending[0];
+
+  // mark as opened — cannot be re-opened without choosing
+  entry.commOpened = true;
+
+  const choiceBtns = entry.choices.map(ch =>
+    `<button class="btn" style="margin:4px 0;width:100%" onclick="handleEventChoice(${logIndex}, '${ch.action}')">${ch.label}</button>`
+  ).join('');
+
+  // no × close button, no ignore — must choose; backdrop click blocked
+  openModal(`<h2 style="margin-top:0">📡 Incoming Transmission</h2>
+    <p style="color:var(--text);margin:12px 0 20px">${entry.text}</p>
+    <div style="display:flex;flex-direction:column;gap:6px">${choiceBtns}</div>`,
+    { lockClose: true });
+}
+
+/* ============================================================
+   Event choices
+   ============================================================ */
+function handleEventChoice(logIndex, action) {
+  const entry = GAME.log[logIndex];
+  if (!entry) return;
+
+  const fuelBuyQty = action === 'buyFuel5' ? 5 : action === 'buyFuel10' ? 10 : action === 'buyFuel20' ? 20 : 0;
+  if (fuelBuyQty > 0) {
+    const price = fuelBuyQty * entry.pricePerUnit;
+    if (GAME.resources.minerals < price) {
+      logMsg(`Not enough minerals (need ${price}).`, 'bad');
+      return;
+    }
+    GAME.resources.minerals -= price;
+    GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + fuelBuyQty);
+    logMsg(`Bought ${fuelBuyQty} fuel for ${price} minerals from the stranded ship.`, 'good');
+    entry.hasChoices = false; entry.choices = [];
+    _forceCloseModal(); renderAll(); saveGame(); return;
+  } else if (action === 'ignoreFuel') {
+    logMsg('You left the stranded ship behind.', 'info');
+    entry.hasChoices = false; entry.choices = [];
+    _forceCloseModal(); renderAll(); saveGame(); return;
+  }
+
+  if (action === 'payPirateBribe') {
+    const minCost = Math.min(entry.bribeAmount, GAME.resources.minerals);
+    GAME.resources.minerals -= minCost;
+    logMsg(`Paid ${minCost} minerals to the pirates. They departed.`, 'bad');
+  } else if (action === 'fightPirates') {
+    const damageMultiplier = 1 + (GAME.sector - 2) * 0.3;
+    const crewDamage = Math.floor(15 * damageMultiplier);
+    const fuelLost = Math.floor(8 + GAME.sector * 2);
+    const mineralLost = Math.floor(25 + GAME.sector * 6);
+
+    GAME.resources.fuel = Math.max(0, GAME.resources.fuel - fuelLost);
+    GAME.resources.minerals = Math.max(0, GAME.resources.minerals - mineralLost);
+
+    aliveCrew().forEach(c => {
+      c.health = Math.max(0, c.health - crewDamage);
+    });
+
+    logMsg(`Fought the pirates! Lost ${fuelLost} fuel, ${mineralLost} minerals, and crew took ${crewDamage} damage.`, 'bad');
+
+  // ---- Distress Signal ----
+  } else if (action === 'rescueFull') {
+    GAME.resources.food  = Math.max(0, GAME.resources.food  - entry.foodCost);
+    GAME.resources.water = Math.max(0, GAME.resources.water - entry.waterCost);
+    GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + 25);
+    aliveCrew().forEach(c => { c.needs.morale = Math.min(100, c.needs.morale + 30); });
+    logMsg(`Rescued ${entry.survivorCount} survivors. Crew morale soared. +25 minerals as thanks.`, 'good');
+  } else if (action === 'rescueDrop') {
+    GAME.resources.food = Math.max(0, GAME.resources.food - Math.floor(entry.foodCost / 2));
+    aliveCrew().forEach(c => { c.needs.morale = Math.min(100, c.needs.morale + 10); });
+    logMsg('Dropped supplies to the survivors. Crew feel good about it.', 'good');
+  } else if (action === 'ignoreSignal') {
+    aliveCrew().forEach(c => { c.needs.morale = Math.max(0, c.needs.morale - 20); });
+    logMsg('Ignored the distress signal. Crew morale dropped.', 'bad');
+
+  // ---- Derelict Station ----
+  } else if (action === 'stationSurvey') {
+    GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + 40);
+    GAME.resources.scrap    = Math.min(cap(GAME, 'scrap'),    GAME.resources.scrap    + 30);
+    logMsg('Careful survey of the derelict station. Recovered 40 minerals and 30 scrap.', 'good');
+  } else if (action === 'stationRaid') {
+    GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + 80);
+    GAME.resources.scrap    = Math.min(cap(GAME, 'scrap'),    GAME.resources.scrap    + 60);
+    GAME.resources.ore      = Math.min(cap(GAME, 'ore'),      GAME.resources.ore      + 20);
+    // trigger a hull breach as the risk
+    const breach = { id: 'hull_breach', name: 'Hull Breach', duration: 70, o2Drain: 2.8, needsRepair: true, repairNeeded: 4 };
+    GAME.events.push(breach);
+    logMsg('Fast raid netted 80 minerals, 60 scrap, 20 ore — but rushing triggered a hull breach!', 'bad');
+  } else if (action === 'passStation') {
+    logMsg('You passed by the derelict station.', 'info');
+
+  // ---- Cargo Pod ----
+  } else if (action === 'openPod') {
+    const c = entry.podContents || {};
+    if (c.food)     GAME.resources.food     = Math.min(cap(GAME, 'food'),     GAME.resources.food     + c.food);
+    if (c.minerals) GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + c.minerals);
+    if (c.scrap)    GAME.resources.scrap    = Math.min(cap(GAME, 'scrap'),    GAME.resources.scrap    + c.scrap);
+    if (c.fuel)     GAME.resources.fuel     = Math.min(cap(GAME, 'fuel'),     GAME.resources.fuel     + c.fuel);
+    if (c.ice)      GAME.resources.ice      = Math.min(cap(GAME, 'ice'),      GAME.resources.ice      + c.ice);
+    logMsg(`Recovered cargo pod: ${c.label}.`, 'good');
+  } else if (action === 'ignorePod') {
+    logMsg('Left the cargo pod drifting.', 'info');
+
+  // ---- Smuggler's Cache ----
+  } else if (action === 'cacheAll') {
+    GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + entry.cacheMineral);
+    GAME.resources.scrap    = Math.min(cap(GAME, 'scrap'),    GAME.resources.scrap    + entry.cacheScrap);
+    aliveCrew().forEach(c => { c.needs.morale = Math.max(0, c.needs.morale - 15); });
+    logMsg(`Took everything from the cache. ${entry.fullLoot}. Crew felt uneasy about it.`, 'bad');
+  } else if (action === 'cacheFuel') {
+    GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + 20);
+    logMsg('Took only the fuel from the cache. +20 fuel.', 'good');
+  } else if (action === 'leaveCache') {
+    logMsg('Left the smuggler\'s cache untouched.', 'info');
+  }
+
+  entry.hasChoices = false;
+  entry.choices = [];
+  _forceCloseModal(); renderAll(); saveGame();
+}
+
 function renderAll() {
   if (!GAME) return;
   renderTop();
   renderShip();
-  renderCrew();
+  if (crewPaneTab === 'crew') renderCrew();
+  else renderStoragePanel();
   renderLog();
   renderControls();
 }
@@ -539,11 +727,20 @@ function renderAll() {
 /* ============================================================
    Modals
    ============================================================ */
-function openModal(html) {
+let _commModalOpen = false;
+function openModal(html, opts = {}) {
+  _commModalOpen = !!opts.lockClose;
   $('#modal-card').innerHTML = `<div class="modal-pad">${html}</div>`;
   $('#modal').classList.remove('hidden');
 }
-function closeModal() { $('#modal').classList.add('hidden'); }
+function closeModal() {
+  if (_commModalOpen) return;  // encounter modal requires a choice
+  $('#modal').classList.add('hidden');
+}
+function _forceCloseModal() {
+  _commModalOpen = false;
+  $('#modal').classList.add('hidden');
+}
 
 /* summary line for build-tray chips: the room's primary attribute at L1 */
 function roomEffectText(type) {

@@ -74,6 +74,29 @@ body {
 .res.food .bar > i { background: var(--food); }
 .res.fuel .bar > i { background: var(--fuel); }
 .res.danger .res-val { color: var(--bad); }
+
+/* compact icon chips (storage + fuel) */
+.res-group-secondary { border-left: 1px solid var(--line); }
+.res-chips { display: flex; gap: 6px; flex-wrap: nowrap; align-items: flex-end; }
+.res-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: 34px; flex: 0 0 34px; cursor: help;
+}
+.res-chip .chip-label { font-size: 8px; color: var(--muted); letter-spacing: .3px; text-transform: uppercase; line-height: 1; }
+.res-chip .chip-bar { width: 100%; height: 3px; border-radius: 3px; background: #0c1322; overflow: hidden; }
+.res-chip .chip-bar > i { display: block; height: 100%; border-radius: 3px; transition: width .2s linear; }
+.res-chip .chip-val { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1; }
+.res-chip.danger .chip-val { color: var(--bad); }
+.res-chip.power .chip-bar > i  { background: var(--power); }
+.res-chip.oxygen .chip-bar > i { background: var(--oxygen); }
+.res-chip.co2 .chip-bar > i    { background: var(--co2); }
+.res-chip.water .chip-bar > i  { background: var(--water); }
+.res-chip.ice .chip-bar > i    { background: var(--ice); }
+.res-chip.minerals .chip-bar > i { background: var(--minerals); }
+.res-chip.ore .chip-bar > i    { background: var(--ore); }
+.res-chip.scrap .chip-bar > i  { background: var(--scrap); }
+.res-chip.food .chip-bar > i   { background: var(--food); }
+.res-chip.fuel .chip-bar > i   { background: var(--fuel); }
 .rate.up { color: var(--good); } .rate.down { color: var(--bad); }
 
 /* resource flow breakdown tooltip */
@@ -246,12 +269,61 @@ body {
 .btn.danger-ghost:hover { border-color: var(--bad); }
 
 /* ---------- crew ---------- */
+/* crew pane tabs */
+.crew-tabs { display: flex; gap: 4px; }
+.crew-tab {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  color: var(--muted); font-size: 12px; letter-spacing: 1px; padding: 2px 8px 4px;
+  cursor: pointer; text-transform: uppercase;
+}
+.crew-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.crew-tab:hover:not(.active) { color: var(--text); }
+
+/* storage panel */
+.storage-panel { display: flex; flex-direction: column; gap: 8px; }
+.storage-panel.hidden { display: none; }
+.crew-list.hidden { display: none; }
+.stor-row {
+  display: grid; grid-template-columns: 70px 1fr 70px 52px;
+  align-items: center; gap: 8px; font-size: 12px;
+}
+.stor-row.danger .stor-val { color: var(--bad); }
+.stor-label { font-weight: 600; font-size: 11px; }
+.stor-label.power    { color: var(--power); }
+.stor-label.oxygen   { color: var(--oxygen); }
+.stor-label.co2      { color: var(--co2); }
+.stor-label.water    { color: var(--water); }
+.stor-label.ice      { color: var(--ice); }
+.stor-label.minerals { color: var(--minerals); }
+.stor-label.ore      { color: var(--ore); }
+.stor-label.scrap    { color: var(--scrap); }
+.stor-label.food     { color: var(--food); }
+.stor-label.fuel     { color: var(--fuel); }
+.stor-bar { height: 4px; border-radius: 3px; background: #0c1322; overflow: hidden; }
+.stor-bar > i { display: block; height: 100%; border-radius: 3px; transition: width .2s linear; }
+.stor-bar > i.power    { background: var(--power); }
+.stor-bar > i.oxygen   { background: var(--oxygen); }
+.stor-bar > i.co2      { background: var(--co2); }
+.stor-bar > i.water    { background: var(--water); }
+.stor-bar > i.ice      { background: var(--ice); }
+.stor-bar > i.minerals { background: var(--minerals); }
+.stor-bar > i.ore      { background: var(--ore); }
+.stor-bar > i.scrap    { background: var(--scrap); }
+.stor-bar > i.food     { background: var(--food); }
+.stor-bar > i.fuel     { background: var(--fuel); }
+.stor-val { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+.stor-max { color: var(--muted); font-weight: 400; font-size: 10px; }
+.sr-rate { font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
+.sr-rate.up { color: var(--good); }
+.sr-rate.down { color: var(--bad); }
+
 .crew-list { display: flex; flex-direction: column; gap: 9px; }
 .crew {
   background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px;
   border-left: 3px solid var(--role, var(--accent));
 }
-.crew.dead { opacity: .45; filter: grayscale(.7); }
+.crew.dead { opacity: .55; filter: grayscale(.7); }
+.eject-btn { color: var(--bad) !important; border-color: rgba(255,107,107,.35) !important; font-size: 11px; padding: 2px 8px; }
 .crew-top { display: flex; align-items: center; justify-content: space-between; }
 .crew-name { font-weight: 600; }
 .crew-role { font-size: 11px; color: var(--muted); }
@@ -286,12 +358,20 @@ body {
 #logbar { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow); }
 .log-head { font-size: 12px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
 .log { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
-.log .entry { display: flex; gap: 8px; }
+.log .entry { display: flex; flex-direction: column; gap: 4px; }
+.log .entry > div:first-child { display: flex; gap: 8px; }
 .log .entry .ts { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 44px; }
 .log .info { color: var(--text); }
 .log .good { color: var(--good); }
 .log .warn { color: var(--warn); }
 .log .bad { color: var(--bad); }
+.event-choices { display: flex; gap: 6px; flex-wrap: wrap; margin-left: 52px; }
+.choice-btn {
+  background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+  padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;
+  transition: all 0.2s; white-space: nowrap;
+}
+.choice-btn:hover { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 
 /* ---------- modal ---------- */
 .modal { position: fixed; inset: 0; background: rgba(4,7,13,.78); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
