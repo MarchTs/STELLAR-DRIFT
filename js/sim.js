@@ -134,16 +134,23 @@ function step(dt) {
       R.water -= wantW * f; R.oxygen -= wantO * f;
       R.food += HY.foodOut * m * f * dt;
     });
-    // Manufactor: converts scrap (2:1) and ore (1:1) into minerals
+    // Manufactor: operator processes scrap + ore into minerals; Engineering skill scales yield
     roomsOfType('manufactor').forEach(r => {
+      const staff = staffOn(r.id);
+      if (staff <= 0) return;
       const MF = CONFIG.rooms.manufactor;
-      const eff = attrMult(r, 'efficiency');
-      // Process ore: 1 ore -> 1 mineral per tick
-      const oreProc = Math.min(R.ore, cap(GAME, 'minerals') - R.minerals) * eff * dt;
+      const eff = attrMult(r, 'efficiency') * staff;
+      const skillMult = (() => {
+        const c = GAME.crew.find(x => x.state === 'working' && x.roomId === r.id && x.atStation);
+        return c ? 1 + (crewSkillLevel(c, 'engineering') - 1) * CONFIG.skill.outputPerLevel : 1;
+      })();
+      const rate = eff * skillMult;
+      // Process ore: 1 ore -> 1 mineral
+      const oreProc = Math.min(R.ore, cap(GAME, 'minerals') - R.minerals, MF.oreCost * rate * dt);
       R.ore -= oreProc;
       R.minerals += oreProc;
-      // Process scrap: 2 scrap -> 1 mineral per tick
-      const scrapProc = Math.min(Math.floor(R.scrap / 2), cap(GAME, 'minerals') - R.minerals) * eff * dt;
+      // Process scrap: 2 scrap -> 1 mineral
+      const scrapProc = Math.min(R.scrap / 2, cap(GAME, 'minerals') - R.minerals, MF.scrapCost / 2 * rate * dt);
       R.scrap -= scrapProc * 2;
       R.minerals += scrapProc;
     });

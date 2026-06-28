@@ -167,7 +167,7 @@ const SKILLS = {
 };
 const SKILL_KEYS = ['engineering', 'mining', 'botany'];
 // which skill a module's work draws on (modules not listed need no skilled operator)
-const ROOM_SKILL = { reactor: 'engineering', lifesupport: 'engineering', extractor: 'mining', hydroponics: 'botany' };
+const ROOM_SKILL = { reactor: 'engineering', lifesupport: 'engineering', extractor: 'mining', hydroponics: 'botany', manufactor: 'engineering' };
 
 // ------------------------------------------------------------
 // Room definitions (display + behavior flags)
@@ -183,7 +183,7 @@ const ROOM_DEFS = {
   messhall:    { name: 'Mess Hall',   icon: '🍴', staffRole: null,       auto: true,  desc: 'A proper galley. Crew eat here for a morale boost instead of grazing the Hydroponics bay.' },
   storage:     { name: 'Storage Room', icon: '📦', staffRole: null,      auto: true,  desc: 'Extra cargo bay. Increases all resource storage capacity.' },
   fuelsynthesis: { name: 'Fuel Synthesis', icon: '⚗', staffRole: null,  auto: true,  desc: 'Automated refinery. Converts water into fuel continuously. Needs power.' },
-  manufactor:  { name: 'Manufactor',  icon: '⚙', staffRole: null,       auto: true,  desc: 'Industrial processor. Converts scrap and ore into refined minerals. Needs power.' },
+  manufactor:  { name: 'Manufactor',  icon: '⚙', staffRole: null,       auto: false, desc: 'An operator processes scrap and ore into refined minerals. Engineering skill improves yield. Needs power.' },
 };
 
 // random crew names
