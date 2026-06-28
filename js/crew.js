@@ -75,8 +75,8 @@ function setState(c, s) {
 }
 
 // each producing module's output resource, and how life-critical it is
-const ROOM_OUTPUT = { reactor: 'power', lifesupport: 'oxygen', extractor: 'minerals', hydroponics: 'food' };
-const JOB_WEIGHT = { lifesupport: 4, reactor: 3, hydroponics: 2, extractor: 1 };
+const ROOM_OUTPUT = { reactor: 'power', lifesupport: 'oxygen', extractor: 'minerals', hydroponics: 'food', manufactor: 'minerals' };
+const JOB_WEIGHT = { lifesupport: 4, reactor: 3, hydroponics: 2, manufactor: 1.5, extractor: 1 };
 
 // How badly room `r` needs an operator right now, from crew c's point of view.
 // 0 = not needed. Higher = more urgent. Hysteresis (via `here`) keeps the current
@@ -92,6 +92,13 @@ function jobNeed(c, r) {
     const co2Need = here ? co2F > 0.1 : co2F >= 0.45;
     if (!o2Need && !co2Need) return 0;
     return JOB_WEIGHT.lifesupport * Math.max(1 - o2F, co2F);
+  }
+  if (r.type === 'manufactor') {
+    if (!hasPower(GAME)) return 0;
+    if (GAME.resources.ore <= 0 && GAME.resources.scrap < 2) return 0;  // nothing to process
+    const frac = GAME.resources.minerals / cap(GAME, 'minerals');
+    if (frac >= (here ? 0.999 : 0.92)) return 0;
+    return JOB_WEIGHT.manufactor * (1 - frac);
   }
   const frac = GAME.resources[ROOM_OUTPUT[r.type]] / cap(GAME, ROOM_OUTPUT[r.type]);
   if (frac >= (here ? 0.999 : 0.92)) return 0;           // full enough — not needed
