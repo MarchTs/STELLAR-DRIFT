@@ -286,7 +286,7 @@ function renderCrew() {
       <div class="crew-top">
         <div><span class="crew-name">${c.name}</span></div>
         ${dead
-          ? `<button class="btn small eject-btn" onclick="ejectCrew('${c.id}')">⏏ Eject</button>`
+          ? `<button class="btn small eject-btn" data-eject="${c.id}">⏏ Eject</button>`
           : `<span class="crew-state ${c.state}">${c.state}</span>`}
       </div>
       ${dead ? '' : `<div class="crew-skills">${skillChips}</div>
@@ -323,11 +323,19 @@ function renderControls() {
   }
   const comm = $('#btn-comm');
   if (comm) {
-    const hasEncounter = GAME.log.some(e => e.hasChoices);
+    const pendingEntry = GAME.log.find(e => e.hasChoices);
+    const hasEncounter = !!pendingEntry;
     const atStation = GAME.atStation;
     comm.disabled = !hasEncounter && !atStation;
     comm.classList.toggle('flash', hasEncounter);
-    comm.textContent = atStation && !hasEncounter ? '◉ Trade' : '📡 Comm';
+    if (atStation && !hasEncounter) {
+      comm.textContent = '◉ Trade';
+    } else if (hasEncounter && pendingEntry.spawnedAt !== undefined) {
+      const secs = Math.max(0, Math.ceil(ENCOUNTER_TIMEOUT_S - (GAME.time - pendingEntry.spawnedAt)));
+      comm.textContent = `📡 Comm ${secs}s`;
+    } else {
+      comm.textContent = '📡 Comm';
+    }
   }
   const si = $('#sector-info');
   if (si && GAME.stock) {
@@ -598,15 +606,30 @@ function openCommModal() {
   // mark as opened — cannot be re-opened without choosing
   entry.commOpened = true;
 
+  const defaultAction = _defaultEncounterAction(entry.eventId);
+  const secsLeft = () => Math.max(0, Math.ceil(ENCOUNTER_TIMEOUT_S - (GAME.time - (entry.spawnedAt ?? GAME.time))));
+
   const choiceBtns = entry.choices.map(ch =>
     `<button class="btn" style="margin:4px 0;width:100%" onclick="handleEventChoice(${logIndex}, '${ch.action}')">${ch.label}</button>`
   ).join('');
 
   // no × close button, no ignore — must choose; backdrop click blocked
   openModal(`<h2 style="margin-top:0">📡 Incoming Transmission</h2>
-    <p style="color:var(--text);margin:12px 0 20px">${entry.text}</p>
+    <p style="color:var(--muted);font-size:11px;margin:0 0 4px">⏱ <span id="comm-countdown">${secsLeft()}</span>s to respond${defaultAction ? ' or auto-resolve' : ''}</p>
+    <p style="color:var(--text);margin:8px 0 20px">${entry.text}</p>
     <div style="display:flex;flex-direction:column;gap:6px">${choiceBtns}</div>`,
     { lockClose: true });
+
+  if (_commTimerInterval) { clearInterval(_commTimerInterval); _commTimerInterval = null; }
+  _commTimerInterval = setInterval(() => {
+    const r = secsLeft();
+    const el = document.getElementById('comm-countdown');
+    if (el) { el.textContent = r; el.style.color = r <= 10 ? 'var(--danger,#f55)' : ''; }
+    if (r <= 0 && defaultAction) {
+      clearInterval(_commTimerInterval); _commTimerInterval = null;
+      handleEventChoice(logIndex, defaultAction);
+    }
+  }, 1000);
 }
 
 /* ============================================================
@@ -625,17 +648,18 @@ function handleEventChoice(logIndex, action) {
     }
     GAME.resources.minerals -= price;
     GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + fuelBuyQty);
-    logMsg(`Bought ${fuelBuyQty} fuel for ${price} minerals from the stranded ship.`, 'good');
+    logMsg(`Purchased ${fuelBuyQty} fuel for ${price} minerals from the trader.`, 'good');
     entry.hasChoices = false; entry.choices = [];
     _forceCloseModal(); renderAll(); saveGame(); return;
   } else if (action === 'ignoreFuel') {
-    logMsg('You left the stranded ship behind.', 'info');
+    logMsg('Continued on without buying fuel.', 'info');
     entry.hasChoices = false; entry.choices = [];
     _forceCloseModal(); renderAll(); saveGame(); return;
   }
 
   if (action === 'payPirateBribe') {
-    const minCost = Math.min(entry.bribeAmount, GAME.resources.minerals);
+    const bribeAmt = entry.bribeAmount ?? Math.floor(20 + GAME.sector * 5);
+    const minCost = Math.min(bribeAmt, GAME.resources.minerals);
     GAME.resources.minerals -= minCost;
     logMsg(`Paid ${minCost} minerals to the pirates. They departed.`, 'bad');
   } else if (action === 'fightPirates') {
@@ -648,7 +672,7 @@ function handleEventChoice(logIndex, action) {
     GAME.resources.minerals = Math.max(0, GAME.resources.minerals - mineralLost);
 
     aliveCrew().forEach(c => {
-      c.health = Math.max(0, c.health - crewDamage);
+      c.needs.health = Math.max(0, c.needs.health - crewDamage);
     });
 
     logMsg(`Fought the pirates! Lost ${fuelLost} fuel, ${mineralLost} minerals, and crew took ${crewDamage} damage.`, 'bad');
@@ -701,7 +725,7 @@ function handleEventChoice(logIndex, action) {
     GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + entry.cacheMineral);
     GAME.resources.scrap    = Math.min(cap(GAME, 'scrap'),    GAME.resources.scrap    + entry.cacheScrap);
     aliveCrew().forEach(c => { c.needs.morale = Math.max(0, c.needs.morale - 15); });
-    logMsg(`Took everything from the cache. ${entry.fullLoot}. Crew felt uneasy about it.`, 'bad');
+    logMsg(`Took everything from the cache: ${entry.cacheMineral} minerals + ${entry.cacheScrap} scrap. Crew felt uneasy about it.`, 'bad');
   } else if (action === 'cacheFuel') {
     GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + 20);
     logMsg('Took only the fuel from the cache. +20 fuel.', 'good');
@@ -716,6 +740,7 @@ function handleEventChoice(logIndex, action) {
 
 function renderAll() {
   if (!GAME) return;
+  checkEncounterExpiry();
   renderTop();
   renderShip();
   if (crewPaneTab === 'crew') renderCrew();
@@ -728,6 +753,27 @@ function renderAll() {
    Modals
    ============================================================ */
 let _commModalOpen = false;
+let _commTimerInterval = null;
+
+const ENCOUNTER_TIMEOUT_S = 60;
+
+function _defaultEncounterAction(eventId) {
+  return { space_pirate: 'fightPirates', fuel_shortage: 'ignoreFuel',
+           distress_signal: 'ignoreSignal', abandoned_station: 'passStation',
+           cargo_pod: 'ignorePod', smuggler_cache: 'leaveCache' }[eventId] || null;
+}
+
+function checkEncounterExpiry() {
+  GAME.log.forEach((entry, i) => {
+    if (!entry.hasChoices || entry.spawnedAt === undefined) return;
+    if (GAME.time - entry.spawnedAt < ENCOUNTER_TIMEOUT_S) return;
+    const action = _defaultEncounterAction(entry.eventId);
+    if (!action) return;
+    if (_commModalOpen) _forceCloseModal();
+    handleEventChoice(i, action);
+  });
+}
+
 function openModal(html, opts = {}) {
   _commModalOpen = !!opts.lockClose;
   $('#modal-card').innerHTML = `<div class="modal-pad">${html}</div>`;
@@ -739,6 +785,7 @@ function closeModal() {
 }
 function _forceCloseModal() {
   _commModalOpen = false;
+  if (_commTimerInterval) { clearInterval(_commTimerInterval); _commTimerInterval = null; }
   $('#modal').classList.add('hidden');
 }
 

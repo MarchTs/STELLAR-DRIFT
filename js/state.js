@@ -22,7 +22,10 @@ const RES_CAP_SRC = {
   oxygen:   { type: 'lifesupport', attr: 'storage' },
   co2:      { type: 'lifesupport', attr: 'co2storage' },
   water:    { type: 'lifesupport', attr: 'waterstorage' },
-  minerals: { type: 'extractor',   attr: 'storage' },
+  minerals: [
+    { type: 'extractor',  attr: 'storage' },
+    { type: 'manufactor', attr: 'mineralstorage', flatPerLevel: 50 },  // +50 per upgrade level
+  ],
   ore:      { type: 'extractor',   attr: 'storage' },
   scrap:    { type: 'extractor',   attr: 'storage' },
   ice:      { type: 'extractor',   attr: 'icestorage' },
@@ -31,12 +34,21 @@ const RES_CAP_SRC = {
 };
 function cap(st, res) {
   const base = CONFIG.baseCaps[res];
-  const m = RES_CAP_SRC[res];
-  if (!m) return Math.round(base);
-  // every module of the storage type stacks: each adds base * its storage multiplier
-  let c = 0;
-  st.rooms.forEach(r => { if (r.type === m.type && attrDef(r.type, m.attr)) c += base * A_MULT(attrLvl(r, m.attr)); });
-  return Math.round(c || base);
+  const src = RES_CAP_SRC[res];
+  if (!src) return Math.round(base);
+  const sources = Array.isArray(src) ? src : [src];
+  let c = 0, bonus = 0;
+  sources.forEach(m => {
+    st.rooms.forEach(r => {
+      if (r.type !== m.type) return;
+      if (m.flatPerLevel !== undefined) {
+        bonus += (attrLvl(r, m.attr) - 1) * m.flatPerLevel;
+      } else if (attrDef(r.type, m.attr)) {
+        c += base * A_MULT(attrLvl(r, m.attr));
+      }
+    });
+  });
+  return Math.round((c || base) + bonus);
 }
 
 function crewMaxHealth() { return 100; }
@@ -79,6 +91,8 @@ function loadGame() {
         c.specialty = sp; c.color = SKILLS[sp].color;
         delete c.role; delete c.skillLevel; delete c.xp;
       }
+      if (!c.needs) c.needs = { hunger: 80, energy: 90, health: c.health ?? 100, morale: 80 };
+      if (!c.id) c.id = 'c' + Math.floor(Math.random() * 1e9).toString(36);
     });
     // backfill any resources / sector stock added in later versions
     if (GAME && GAME.resources) {

@@ -75,8 +75,8 @@ function setState(c, s) {
 }
 
 // each producing module's output resource, and how life-critical it is
-const ROOM_OUTPUT = { reactor: 'power', lifesupport: 'oxygen', extractor: 'minerals', hydroponics: 'food' };
-const JOB_WEIGHT = { lifesupport: 4, reactor: 3, hydroponics: 2, extractor: 1 };
+const ROOM_OUTPUT = { reactor: 'power', lifesupport: 'oxygen', extractor: 'minerals', hydroponics: 'food', manufactor: 'minerals' };
+const JOB_WEIGHT = { lifesupport: 4, reactor: 3, hydroponics: 2, manufactor: 1.5, extractor: 1 };
 
 // How badly room `r` needs an operator right now, from crew c's point of view.
 // 0 = not needed. Higher = more urgent. Hysteresis (via `here`) keeps the current
@@ -93,14 +93,22 @@ function jobNeed(c, r) {
     if (!o2Need && !co2Need) return 0;
     return JOB_WEIGHT.lifesupport * Math.max(1 - o2F, co2F);
   }
+  if (r.type === 'manufactor') {
+    if (!hasPower(GAME)) return 0;
+    if (GAME.resources.ore <= 0 && GAME.resources.scrap < 2) return 0;  // nothing to process
+    const frac = GAME.resources.minerals / cap(GAME, 'minerals');
+    if (frac >= (here ? 0.999 : 0.92)) return 0;
+    return JOB_WEIGHT.manufactor * (1 - frac);
+  }
   const frac = GAME.resources[ROOM_OUTPUT[r.type]] / cap(GAME, ROOM_OUTPUT[r.type]);
   if (frac >= (here ? 0.999 : 0.92)) return 0;           // full enough — not needed
   return (JOB_WEIGHT[r.type] || 1) * (1 - frac);
 }
 
+const MULTI_CREW_ROOMS = new Set(['quarters', 'messhall']);
+
 // Role-less, demand-driven: a crew operates whichever module most needs a body.
-// Dividing by OTHER crew assigned spreads them out (excluding self so the current
-// job isn't self-penalised); a continuity bonus keeps a crew put to avoid thrashing.
+// Production rooms are single-operator; only quarters and mess hall accept many.
 function pickWorkRoom(c) {
   let best = null, bestScore = 0;
   GAME.rooms.forEach(r => {
@@ -108,6 +116,7 @@ function pickWorkRoom(c) {
     if (need <= 0) return;
     const here = c.roomId === r.id;
     const others = assignedOn(r.id) - (here ? 1 : 0);
+    if (!MULTI_CREW_ROOMS.has(r.type) && others >= 1) return;  // room full
     let score = need / (others + 1);
     if (here) score *= 1.6;                  // stickiness: don't abandon a job that still needs work
     if (score > bestScore) { bestScore = score; best = r; }
