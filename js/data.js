@@ -66,6 +66,10 @@ const CONFIG = {
     storage:    { powerCost: 0 },
     fuelsynthesis: { powerCost: 1.2, fuelOut: 0.8, waterCost: 0.8 },
     manufactor: { powerCost: 1.0, scrapCost: 2.0, oreCost: 1.0, mineralsOut: 1.0 },
+    // Combat rooms. powerCost is drawn by the combat engine via power pips, NOT by the
+    // idle power sim — these sit on standby (free) until a fight starts.
+    weapons:    { powerCost: 2.0, damage: 2.0, chargeSec: 6.0 },
+    shields:    { powerCost: 2.5, layers: 1, rechargeSec: 9.0 },
   },
 
   // level scaling: output & cap multiply by (1 + (level-1)*levelGain)
@@ -84,8 +88,20 @@ const CONFIG = {
     storage: 40,
     fuelsynthesis: 75,
     manufactor: 80,
+    weapons: 90,
+    shields: 85,
     upgradeBase: 30,    // upgrade cost = upgradeBase * level * 1.6
     upgradeMult: 1.6,
+  },
+
+  // ---- Combat (FTL-style ship fights) ----
+  // `integrity` is combat HP. Deliberately NOT called "hull" — hull/hullTier/HULL_COLS
+  // already mean the ship's physical structure and bay count.
+  combat: {
+    integrityBase: 30,        // integrity at hull tier 1
+    integrityPerTier: 10,     // +per additional hull tier
+    evasionPerEngineLvl: 0.06,   // dodge chance added per Engine level
+    evasionMax: 0.6,
   },
 
   // ---- Skills ----
@@ -161,13 +177,17 @@ const CONFIG = {
 // the relevant skill makes them more efficient at it.
 // ------------------------------------------------------------
 const SKILLS = {
-  engineering: { name: 'Engineering', color: '#ffb454' },   // reactor, life support, repairs
+  engineering: { name: 'Engineering', color: '#ffb454' },   // reactor, life support, repairs, shields
   mining:      { name: 'Mining',      color: '#6fd3c7' },   // mining drone
   botany:      { name: 'Botany',      color: '#9ad36f' },   // hydroponics
+  gunnery:     { name: 'Gunnery',     color: '#ff6b6b' },   // weapons bay (combat only)
 };
-const SKILL_KEYS = ['engineering', 'mining', 'botany'];
+const SKILL_KEYS = ['engineering', 'mining', 'botany', 'gunnery'];
 // which skill a module's work draws on (modules not listed need no skilled operator)
-const ROOM_SKILL = { reactor: 'engineering', lifesupport: 'engineering', extractor: 'mining', hydroponics: 'botany', manufactor: 'engineering' };
+const ROOM_SKILL = { reactor: 'engineering', lifesupport: 'engineering', extractor: 'mining', hydroponics: 'botany', manufactor: 'engineering', weapons: 'gunnery', shields: 'engineering' };
+// Rooms that only do anything during a fight. They draw power and take crew via the combat
+// engine, never via the idle sim — so the economy AI must ignore them outside combat.
+const COMBAT_ROOMS = new Set(['weapons', 'shields']);
 
 // ------------------------------------------------------------
 // Room definitions (display + behavior flags)
@@ -184,6 +204,8 @@ const ROOM_DEFS = {
   storage:     { name: 'Storage Room', icon: '📦', staffRole: null,      auto: true,  desc: 'Extra cargo bay. Increases all resource storage capacity.' },
   fuelsynthesis: { name: 'Fuel Synthesis', icon: '⚗', staffRole: null,  auto: true,  desc: 'Automated refinery. Converts water into fuel continuously. Needs power.' },
   manufactor:  { name: 'Manufactor',  icon: '⚙', staffRole: null,       auto: false, desc: 'An operator processes scrap and ore into refined minerals. Engineering skill improves yield. Needs power.' },
+  weapons:     { name: 'Weapons Bay', icon: '✷', staffRole: null,       auto: false, desc: 'A gunner fires on enemy ships in combat. Gunnery skill improves damage and charge speed. Idle outside a fight.' },
+  shields:     { name: 'Shield Generator', icon: '◈', staffRole: null,  auto: false, desc: 'An operator raises shield layers that absorb enemy fire in combat. Engineering skill speeds recharge. Idle outside a fight.' },
 };
 
 // random crew names
@@ -289,6 +311,18 @@ const ROOM_ATTRS = {
       hint: (l) => `+${_r((A_MULT(l) - 1) * 100)}% conversion speed` },
     { key: 'mineralstorage', name: 'Mineral Storage',  kind: 'mult', base: 20, max: 8,
       hint: (l) => `+${(l - 1) * 50} mineral cap (+50 per level)` },
+  ],
+  weapons: [
+    { key: 'damage',     name: 'Weapon Damage', kind: 'mult', base: 32, max: 10,
+      hint: (l) => `${_f(CONFIG.rooms.weapons.damage * A_MULT(l))} damage per shot` },
+    { key: 'chargerate', name: 'Charge Rate',   kind: 'eff',  base: 28, max: 6,
+      hint: (l) => `${_f(CONFIG.rooms.weapons.chargeSec * A_EFF(l))}s between shots` },
+  ],
+  shields: [
+    { key: 'layers',   name: 'Shield Layers',  kind: 'beds', base: 36, max: 4, baseN: 1,
+      hint: (l) => `${A_BEDS(1, l)} shield layer${A_BEDS(1, l) > 1 ? 's' : ''}` },
+    { key: 'recharge', name: 'Recharge Rate',  kind: 'eff',  base: 28, max: 6,
+      hint: (l) => `${_f(CONFIG.rooms.shields.rechargeSec * A_EFF(l))}s per layer` },
   ],
 };
 

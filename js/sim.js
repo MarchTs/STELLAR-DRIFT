@@ -5,9 +5,11 @@ function newRun(challengeId) {
   const startLevel = ch.startSkill || 3;
   const crewCount = ch.crew || 3;
 
-  // crew specialise round-robin across the skills; anyone can still do any job
+  // crew specialise round-robin across the economy skills; anyone can still do any job.
+  // Gunnery is excluded — it does nothing outside combat, so nobody starts wasted on it.
+  const startSkills = SKILL_KEYS.filter(k => k !== 'gunnery');
   const crew = [];
-  for (let i = 0; i < crewCount; i++) crew.push(makeCrew(SKILL_KEYS[i % SKILL_KEYS.length], startLevel));
+  for (let i = 0; i < crewCount; i++) crew.push(makeCrew(startSkills[i % startSkills.length], startLevel));
   const used = new Set();
   crew.forEach(c => { let n = 0; while (used.has(c.name) && n++ < 50) c.name = pick(CREW_NAMES); used.add(c.name); });
 
@@ -42,6 +44,8 @@ function newRun(challengeId) {
     sd: 0,
     atStation: false,
     unlockedBlueprints: new Set(),
+    integrity: CONFIG.combat.integrityBase,   // combat HP; max derives from hullTier
+    combat: null,                             // active fight state, null when not fighting
   };
   clampResources();
   logMsg(`Systems online — ${ch.name}. Keep your crew alive.`, 'good');

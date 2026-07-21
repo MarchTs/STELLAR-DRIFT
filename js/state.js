@@ -93,6 +93,8 @@ function loadGame() {
       }
       if (!c.needs) c.needs = { hunger: 80, energy: 90, health: c.health ?? 100, morale: 80 };
       if (!c.id) c.id = 'c' + Math.floor(Math.random() * 1e9).toString(36);
+      // backfill skills added in later versions (e.g. gunnery) so they can earn XP
+      if (c.skills) SKILL_KEYS.forEach(k => { if (!c.skills[k]) c.skills[k] = { level: 1, xp: 0 }; });
     });
     // backfill any resources / sector stock added in later versions
     if (GAME && GAME.resources) {
@@ -106,6 +108,9 @@ function loadGame() {
     if (GAME && !GAME.challenge) GAME.challenge = 'standard';
     if (GAME && GAME.sd === undefined) GAME.sd = 0;
     if (GAME && GAME.atStation === undefined) GAME.atStation = false;
+    if (GAME && GAME.combat === undefined) GAME.combat = null;
+    if (GAME && GAME.integrity === undefined) GAME.integrity = CONFIG.combat.integrityBase;
+    if (GAME) GAME.integrity = Math.min(GAME.integrity, maxIntegrity());
     if (GAME && !GAME.unlockedBlueprints) {
       GAME.unlockedBlueprints = new Set();
     } else if (GAME && !(GAME.unlockedBlueprints instanceof Set)) {

@@ -8,8 +8,10 @@ function makeRoom(type, bay) {
 /* ----------------------------------------------------------
    Build / upgrade rooms
    ---------------------------------------------------------- */
-const BUILDABLE = ['extractor', 'hydroponics', 'quarters', 'medbay', 'messhall', 'lifesupport', 'reactor', 'engine', 'storage', 'fuelsynthesis', 'manufactor'];
-const SINGLE_INSTANCE = { medbay: 1, engine: 1, messhall: 1 };   // at most one of these
+const BUILDABLE = ['extractor', 'hydroponics', 'quarters', 'medbay', 'messhall', 'lifesupport', 'reactor', 'engine', 'storage', 'fuelsynthesis', 'manufactor', 'weapons', 'shields'];
+// at most one of these. Combat rooms are single-instance like their FTL counterparts —
+// firepower and shielding scale through upgrades, not by stacking rooms.
+const SINGLE_INSTANCE = { medbay: 1, engine: 1, messhall: 1, weapons: 1, shields: 1 };
 const BLUEPRINT_GATED = { storage: true, fuelsynthesis: true, manufactor: true };  // require blueprint unlock
 // bay count grows with the hull tier (tier 1 = 8 bays, +2 per tier). See js/ship.js.
 function hullTier() { return (GAME && GAME.hullTier) || 1; }

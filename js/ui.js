@@ -825,7 +825,7 @@ function openRoomDetail(roomId, mode) {
     <p class="muted">${def.desc}</p>
     <div class="detail-row"><span>Status</span><span>${staffCountText(room)}</span></div>
     ${CONFIG.rooms[room.type] && CONFIG.rooms[room.type].powerCost
-      ? `<div class="detail-row"><span>Power draw</span><span style="color:var(--power)">${(CONFIG.rooms[room.type].powerCost * primaryMult(room) * (attrDef(room.type,'efficiency') ? attrEff(room,'efficiency') : 1)).toFixed(1)}/s</span></div>` : ''}
+      ? `<div class="detail-row"><span>Power draw${COMBAT_ROOMS.has(room.type) ? ' (in combat)' : ''}</span><span style="color:var(--power)">${(CONFIG.rooms[room.type].powerCost * primaryMult(room) * (attrDef(room.type,'efficiency') ? attrEff(room,'efficiency') : 1)).toFixed(1)}/s</span></div>` : ''}
     <div class="attr-grid">${attrRows}</div>
     <div class="row-actions">
       ${confirming

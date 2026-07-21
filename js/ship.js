@@ -360,10 +360,12 @@ function assignHazardTile(ev) {
 const ROOM_FLOOR = {
   reactor: '#33282f', lifesupport: '#1c2b35', extractor: '#322f1f',
   hydroponics: '#203121', quarters: '#272234', medbay: '#311f26', engine: '#2a2620', messhall: '#2e2a1d',
+  weapons: '#331f1f', shields: '#1f2a33',
 };
 const ROOM_ACCENT = {
   reactor: '#ffd25c', lifesupport: '#6fd3ff', extractor: '#c8a4ff',
   hydroponics: '#9ad36f', quarters: '#9aa6c8', medbay: '#ff6b6b', engine: '#ff9d5c', messhall: '#ffce5c',
+  weapons: '#ff7a5c', shields: '#5cc8ff',
 };
 const STATE_BADGE = { sleeping: 'z', eating: '◦', healing: '✚', repairing: '🔧' };
 
