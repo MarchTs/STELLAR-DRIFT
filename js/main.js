@@ -36,11 +36,12 @@ function loop(now) {
       // snapshot for rate display
       const before = Object.assign({}, GAME.resources);
 
-      // sub-step for stability if dt large
+      // sub-step for stability if dt large. A fight replaces the economy tick
+      // entirely — resources and crew needs hold still until it resolves.
       let remaining = dt;
       while (remaining > 0) {
         const s = Math.min(remaining, CONFIG.tickMs / 1000);
-        step(s);
+        if (GAME.combat) combatStep(s); else step(s);
         remaining -= s;
         if (GAME.gameOver) break;
       }
@@ -56,7 +57,10 @@ function loop(now) {
       // periodic autosave
       saveTimer += dt;
       if (saveTimer >= CONFIG.saveEveryMs / 1000) { saveTimer = 0; saveGame(); }
+    }
 
+    // Render outside the pause gate so a paused fight still draws and stays clickable.
+    if (GAME && !GAME.gameOver) {
       renderAll();
       updateShip(dt);
       drawShip();

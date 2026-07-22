@@ -663,19 +663,12 @@ function handleEventChoice(logIndex, action) {
     GAME.resources.minerals -= minCost;
     logMsg(`Paid ${minCost} minerals to the pirates. They departed.`, 'bad');
   } else if (action === 'fightPirates') {
-    const damageMultiplier = 1 + (GAME.sector - 2) * 0.3;
-    const crewDamage = Math.floor(15 * damageMultiplier);
-    const fuelLost = Math.floor(8 + GAME.sector * 2);
-    const mineralLost = Math.floor(25 + GAME.sector * 6);
-
-    GAME.resources.fuel = Math.max(0, GAME.resources.fuel - fuelLost);
-    GAME.resources.minerals = Math.max(0, GAME.resources.minerals - mineralLost);
-
-    aliveCrew().forEach(c => {
-      c.needs.health = Math.max(0, c.needs.health - crewDamage);
-    });
-
-    logMsg(`Fought the pirates! Lost ${fuelLost} fuel, ${mineralLost} minerals, and crew took ${crewDamage} damage.`, 'bad');
+    // Refusing now starts a real fight instead of applying flat damage.
+    entry.hasChoices = false; entry.choices = [];
+    _forceCloseModal();
+    startCombat();
+    renderAll(); saveGame();
+    return;
 
   // ---- Distress Signal ----
   } else if (action === 'rescueFull') {

@@ -68,7 +68,7 @@ const CONFIG = {
     manufactor: { powerCost: 1.0, scrapCost: 2.0, oreCost: 1.0, mineralsOut: 1.0 },
     // Combat rooms. powerCost is drawn by the combat engine via power pips, NOT by the
     // idle power sim — these sit on standby (free) until a fight starts.
-    weapons:    { powerCost: 2.0, damage: 2.0, chargeSec: 6.0 },
+    weapons:    { powerCost: 2.0, damage: 3.2, chargeSec: 5.0 },
     shields:    { powerCost: 2.5, layers: 1, rechargeSec: 9.0 },
   },
 
@@ -102,6 +102,23 @@ const CONFIG = {
     integrityPerTier: 10,     // +per additional hull tier
     evasionPerEngineLvl: 0.06,   // dodge chance added per Engine level
     evasionMax: 0.6,
+    // ---- power pips ----
+    pipsBase: 3,              // pips at reactor output L1
+    pipsPerReactorLvl: 1,
+    pipsMax: 8,
+    weaponPipSpeedup: 0.15,   // each pip past the first cuts charge time by this fraction
+    evasionPerPip: 0.07,      // each pip in engines adds this much dodge
+    // ---- damage & hazards ----
+    crewDamagePerHit: 14,     // injury to crew standing in a struck room
+    fireChance: 0.18,         // chance a hit starts a fire / breach
+    repairSec: 5.0,           // seconds for a crew member to fix a disabled room
+    enemyRepairSec: 8.0,      // seconds before the enemy restores a disabled system
+    // ---- fleeing ----
+    fleeChargeSec: 14.0,      // how long the FTL jump takes to charge
+    fleeFuelCost: 8,
+    // ---- rewards ----
+    lootPerDifficulty: 30,    // minerals/scrap scale, multiplied by enemy difficulty
+    xpSecondsPerWin: 32,      // a win counts as this many seconds of on-the-job training
   },
 
   // ---- Skills ----
@@ -325,6 +342,36 @@ const ROOM_ATTRS = {
       hint: (l) => `${_f(CONFIG.rooms.shields.rechargeSec * A_EFF(l))}s per layer` },
   ],
 };
+
+// ------------------------------------------------------------
+// Enemy ships. Stats are the baseline at sector 1 and scale with sector depth
+// (see scaleEnemy() in js/combat.js). `systems` are the targetable rooms.
+// ------------------------------------------------------------
+const ENEMY_SHIP_DEFS = {
+  scout: {
+    name: 'Pirate Scout', difficulty: 1, minSector: 1,
+    integrity: 12, shieldLayers: 0, rechargeSec: 10,
+    damage: 2.0, chargeSec: 5.5, evasion: 0.25,
+    systems: ['weapons', 'engines'],
+    desc: 'Fast and lightly armed. Hard to hit, but it folds quickly.',
+  },
+  fighter: {
+    name: 'Pirate Fighter', difficulty: 2, minSector: 2,
+    integrity: 20, shieldLayers: 1, rechargeSec: 11,
+    damage: 3.0, chargeSec: 6.0, evasion: 0.15,
+    systems: ['weapons', 'shields', 'engines'],
+    desc: 'A balanced raider — shielded, and it hits back properly.',
+  },
+  gunship: {
+    name: 'Pirate Gunship', difficulty: 3, minSector: 4,
+    integrity: 30, shieldLayers: 2, rechargeSec: 10,
+    damage: 4.0, chargeSec: 6.5, evasion: 0.05,
+    systems: ['weapons', 'shields', 'engines'],
+    desc: 'Slow, heavily shielded, and carries a gun that hurts.',
+  },
+};
+// display names for enemy systems (also used for our own rooms in combat log lines)
+const ENEMY_SYS_NAME = { weapons: 'Weapons', shields: 'Shields', engines: 'Engines' };
 
 // ------------------------------------------------------------
 // Event definitions
