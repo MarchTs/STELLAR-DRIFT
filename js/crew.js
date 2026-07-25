@@ -24,6 +24,48 @@ function makeCrew(specialty, specialtyLevel) {
 /* ----------------------------------------------------------
    Crew AI — pick a state each tick (survival auto-overrides)
    ---------------------------------------------------------- */
+/* ----------------------------------------------------------
+   Manual station orders
+
+   `c.stationId` pins a crew member to one room, overriding the demand-driven AI.
+   The pin is TEMPORARY: it survives repair call-outs (they go patch the breach and
+   come back), but a personal need — healing, sleep, food — releases it for good, so
+   the crew is never dragged back to a post it just left to survive.
+   ---------------------------------------------------------- */
+function stationRoom(c) {
+  if (!c.stationId) return null;
+  const room = GAME.rooms.find(r => r.id === c.stationId);
+  if (!room) { c.stationId = null; return null; }        // room was demolished
+  return room;
+}
+function releaseStation(c, reason) {
+  if (!c.stationId) return;
+  c.stationId = null;
+  if (reason) logMsg(`${c.name} left their post to ${reason}.`, 'warn');
+}
+// Pin a crew member to a room. Single-operator rooms bump whoever was pinned there.
+function assignCrewTo(crewId, roomId) {
+  const c = GAME.crew.find(x => x.id === crewId);
+  const room = GAME.rooms.find(r => r.id === roomId);
+  if (!c || c.state === 'dead' || !room) return false;
+  if (!MULTI_CREW_ROOMS.has(room.type)) {
+    GAME.crew.forEach(o => { if (o !== c && o.stationId === roomId) o.stationId = null; });
+  }
+  c.stationId = roomId;
+  c.state = 'working';
+  c.roomId = roomId;
+  saveGame();
+  return true;
+}
+function unassignCrew(crewId) {
+  const c = GAME.crew.find(x => x.id === crewId);
+  if (!c) return false;
+  c.stationId = null;
+  if (c.state === 'working') { c.state = 'idle'; c.roomId = null; }
+  saveGame();
+  return true;
+}
+
 function updateCrewState(c) {
   if (c.state === 'dead') return;
   const n = c.needs;
@@ -40,8 +82,11 @@ function updateCrewState(c) {
   const medbay = roomsOfType('medbay')[0];
   const canHeal = medbay && hasPower(GAME);
   const bedForHeal = c.state === 'healing' || countState('healing') < totalMedBeds();
-  if (n.health < CONFIG.ai.healThreshold && canHeal && bedForHeal) { setState(c, 'healing'); return; }
-  // 1b. EMERGENCY: drop everything to run to an active hazard and repair it
+  if (n.health < CONFIG.ai.healThreshold && canHeal && bedForHeal) {
+    releaseStation(c, 'get treatment'); setState(c, 'healing'); return;
+  }
+  // 1b. EMERGENCY: drop everything to run to an active hazard and repair it.
+  //     Keeps any station pin — they return to their post once the job is done.
   if (n.health > 12) {
     const job = claimRepairJob(c);
     if (job) { c.state = 'repairing'; c.roomId = null; return; }
@@ -53,12 +98,20 @@ function updateCrewState(c) {
   if (c.state === 'healing' && n.health < CONFIG.ai.healedAt / 100 * maxH && canHeal) return;
   // 3. sleep if exhausted and a berth is free
   const bedForSleep = c.state === 'sleeping' || countState('sleeping') < totalBeds();
-  if (n.energy < c.restThreshold && bedForSleep) { setState(c, 'sleeping'); return; }
+  if (n.energy < c.restThreshold && bedForSleep) {
+    releaseStation(c, 'rest'); setState(c, 'sleeping'); return;
+  }
   // 4. eat if hungry and food available (Mess Hall seats are limited; Hydroponics grazing isn't)
   const seatFree = roomsOfType('messhall').length === 0 || c.state === 'eating' || countState('eating') < totalSeats();
-  if (n.hunger < c.eatThreshold && GAME.resources.food > 1 && seatFree) { setState(c, 'eating'); return; }
+  if (n.hunger < c.eatThreshold && GAME.resources.food > 1 && seatFree) {
+    releaseStation(c, 'eat'); setState(c, 'eating'); return;
+  }
 
-  // 5. otherwise operate a module that needs them — or idle if nothing does
+  // 5. a manual station order outranks the demand-driven AI
+  const pinned = stationRoom(c);
+  if (pinned) { c.state = 'working'; c.roomId = pinned.id; return; }
+
+  // 6. otherwise operate a module that needs them — or idle if nothing does
   const room = pickWorkRoom(c);
   if (room) { c.state = 'working'; c.roomId = room.id; }
   else { c.state = 'idle'; c.roomId = null; }
@@ -117,6 +170,8 @@ function pickWorkRoom(c) {
     const here = c.roomId === r.id;
     const others = assignedOn(r.id) - (here ? 1 : 0);
     if (!MULTI_CREW_ROOMS.has(r.type) && others >= 1) return;  // room full
+    // don't squat a post someone is pinned to — they may just be away on a repair
+    if (!MULTI_CREW_ROOMS.has(r.type) && GAME.crew.some(o => o !== c && o.stationId === r.id)) return;
     let score = need / (others + 1);
     if (here) score *= 1.6;                  // stickiness: don't abandon a job that still needs work
     if (score > bestScore) { bestScore = score; best = r; }

@@ -284,7 +284,11 @@ function renderCrew() {
     ).join('');
     return `<div class="crew ${dead ? 'dead' : ''}" style="--role:${c.color}">
       <div class="crew-top">
-        <div><span class="crew-name">${c.name}</span></div>
+        <div><span class="crew-name">${c.name}</span>${(() => {
+          if (dead || !c.stationId) return '';
+          const sr = GAME.rooms.find(r => r.id === c.stationId);
+          return sr ? `<span class="posted" title="Posted to ${ROOM_DEFS[sr.type].name} — click to release" data-unpost="${c.id}">📌 ${ROOM_DEFS[sr.type].name}</span>` : '';
+        })()}</div>
         ${dead
           ? `<button class="btn small eject-btn" data-eject="${c.id}">⏏ Eject</button>`
           : `<span class="crew-state ${c.state}">${c.state}</span>`}
@@ -819,6 +823,7 @@ function openRoomDetail(roomId, mode) {
     <div class="detail-row"><span>Status</span><span>${staffCountText(room)}</span></div>
     ${CONFIG.rooms[room.type] && CONFIG.rooms[room.type].powerCost
       ? `<div class="detail-row"><span>Power draw${COMBAT_ROOMS.has(room.type) ? ' (in combat)' : ''}</span><span style="color:var(--power)">${(CONFIG.rooms[room.type].powerCost * primaryMult(room) * (attrDef(room.type,'efficiency') ? attrEff(room,'efficiency') : 1)).toFixed(1)}/s</span></div>` : ''}
+    ${stationPickerHtml(room)}
     <div class="attr-grid">${attrRows}</div>
     <div class="row-actions">
       ${confirming
@@ -830,6 +835,32 @@ function openRoomDetail(roomId, mode) {
     </div>
   `);
 }
+/* ---- manual station orders ---- */
+// Rooms worth stationing someone at: anything that produces, plus the combat rooms.
+function isStationable(type) { return !!ROOM_OUTPUT[type] || COMBAT_ROOMS.has(type); }
+
+function stationPickerHtml(room) {
+  if (!isStationable(room.type)) return '';
+  const sk = ROOM_SKILL[room.type];
+  const chips = aliveCrew().map(c => {
+    const hereNow = c.stationId === room.id;
+    const lvl = sk ? crewSkillLevel(c, sk) : 0;
+    const elsewhere = c.stationId && !hereNow;
+    return `<button class="btn small station-chip ${hereNow ? 'primary' : ''}"
+      title="${hereNow ? 'Release from this post' : 'Station here'}${elsewhere ? ' (currently posted elsewhere)' : ''}"
+      onclick="doStation('${room.id}','${c.id}',${hereNow})">${hereNow ? '● ' : ''}${c.name}${sk ? ` <span class="muted">${lvl}</span>` : ''}</button>`;
+  }).join('');
+  return `<div class="station-pick">
+    <div class="station-head">Station${sk ? ` <span class="muted">· ${SKILLS[sk].name}</span>` : ''}</div>
+    <div class="station-chips">${chips || '<span class="muted">No crew aboard.</span>'}</div>
+    <div class="station-note muted">Posted crew hold this station until they need to eat, sleep or heal.</div>
+  </div>`;
+}
+function doStation(roomId, crewId, release) {
+  if (release) unassignCrew(crewId); else assignCrewTo(crewId, roomId);
+  renderAll(); openRoomDetail(roomId);
+}
+
 function doUpgradeAttr(roomId, key) {
   if (upgradeAttr(roomId, key)) { renderAll(); openRoomDetail(roomId); }
 }

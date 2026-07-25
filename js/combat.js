@@ -367,15 +367,8 @@ function toggleFlee() {
   combatLog(c.fleeing ? 'Charging FTL drive…' : 'FTL charge aborted.', 'warn');
   return true;
 }
-// Order a crew member to a room (combat replaces the economy AI's auto-assignment).
+// Order a crew member to a room. Same station pin the idle game uses, so an order given
+// mid-fight still holds afterwards (until that crew needs to eat, sleep or heal).
 function orderCrewTo(crewId, roomId) {
-  const cr = GAME.crew.find(x => x.id === crewId);
-  if (!cr || cr.state === 'dead') return false;
-  const room = GAME.rooms.find(r => r.id === roomId);
-  if (!room) return false;
-  // combat rooms are single-operator, same as production
-  if (!MULTI_CREW_ROOMS.has(room.type) && assignedOn(room.id) > 0 && cr.roomId !== room.id) return false;
-  cr.state = 'working';
-  cr.roomId = room.id;
-  return true;
+  return assignCrewTo(crewId, roomId);
 }

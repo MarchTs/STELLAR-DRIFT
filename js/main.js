@@ -91,8 +91,10 @@ function init() {
   $('#btn-meta').onclick = () => { openChallengeSelect(false); };
 
   $('#crew-list').addEventListener('click', e => {
-    const id = e.target.closest('[data-eject]')?.dataset.eject;
-    if (id) ejectCrew(id);
+    const ejectId = e.target.closest('[data-eject]')?.dataset.eject;
+    if (ejectId) { ejectCrew(ejectId); return; }
+    const unpostId = e.target.closest('[data-unpost]')?.dataset.unpost;
+    if (unpostId) { unassignCrew(unpostId); renderAll(); }
   });
 
   // resource flow breakdown on hover
