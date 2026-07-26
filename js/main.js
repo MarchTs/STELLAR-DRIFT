@@ -100,9 +100,26 @@ function init() {
     if (selId) selectCrew(selectedCrewId === selId ? null : selId);
   });
 
-  // Esc clears a crew selection
+  // combat panel controls (delegated — the panel is rebuilt once per fight)
+  $('#combat-panel').addEventListener('click', e => {
+    if (!GAME.combat) return;
+    const t = e.target.closest('[data-target]');
+    if (t) { setCombatTarget(t.dataset.target); renderAll(); return; }
+    const pip = e.target.closest('[data-pip]');
+    if (pip) { setPips(pip.dataset.pip, +pip.dataset.d); renderAll(); return; }
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'pause') { GAME.paused = !GAME.paused; renderAll(); }
+    else if (act === 'flee') { toggleFlee(); renderAll(); }
+  });
+
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && selectedCrewId) selectCrew(null);
+    // spacebar pauses during a fight, like FTL
+    if (e.code === 'Space' && GAME && GAME.combat && !GAME.gameOver) {
+      e.preventDefault();
+      GAME.paused = !GAME.paused;
+      renderAll();
+    }
   });
 
   // resource flow breakdown on hover

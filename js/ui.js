@@ -744,10 +744,161 @@ function renderAll() {
   checkEncounterExpiry();
   renderTop();
   renderShip();
-  if (crewPaneTab === 'crew') renderCrew();
+  // a fight takes over the crew pane
+  if (GAME.combat) renderCombatPanel();
+  else if (crewPaneTab === 'crew') renderCrew();
   else renderStoragePanel();
+  renderCombatPaneMode();
   renderLog();
   renderControls();
+}
+
+/* ============================================================
+   Combat panel — takes over the crew pane during a fight.
+
+   Built ONCE per fight, then updated in place. Rebuilding the markup every
+   frame would swap out the buttons between mousedown and mouseup, so clicks
+   would never land.
+   ============================================================ */
+let _combatUiKey = null;
+
+// show/hide the crew pane's normal contents while a fight is on
+function renderCombatPaneMode() {
+  const fighting = !!GAME.combat;
+  const tabs = document.querySelector('.crew-tabs');
+  if (tabs) tabs.style.display = fighting ? 'none' : '';
+  $('#crew-list').classList.toggle('hidden', fighting || crewPaneTab !== 'crew');
+  $('#storage-panel').classList.toggle('hidden', fighting || crewPaneTab !== 'storage');
+  $('#combat-panel').classList.toggle('hidden', !fighting);
+  const count = $('#crew-count');
+  if (count && fighting) count.textContent = 'IN COMBAT';
+  if (!fighting) _combatUiKey = null;
+}
+
+const PIP_SYS = [
+  { key: 'weapons', name: 'Weapons', color: 'var(--bad)' },
+  { key: 'shields', name: 'Shields', color: 'var(--accent)' },
+  { key: 'engines', name: 'Engines', color: 'var(--warn)' },
+];
+
+function combatSkeleton(c) {
+  const sysBtns = c.enemy.systems.map(s =>
+    `<button class="ct-sys" data-target="${s.sys}">
+       <span class="ct-sys-name">${ENEMY_SYS_NAME[s.sys]}</span>
+       <span class="ct-sys-state"></span>
+     </button>`).join('');
+  const pipRows = PIP_SYS.map(p =>
+    `<div class="pip-row">
+       <span class="pip-name" style="color:${p.color}">${p.name}</span>
+       <span class="pip-dots" data-pips="${p.key}"></span>
+       <span class="pip-btns">
+         <button class="btn small pip-btn" data-pip="${p.key}" data-d="-1">−</button>
+         <button class="btn small pip-btn" data-pip="${p.key}" data-d="1">+</button>
+       </span>
+     </div>`).join('');
+  return `
+    <div class="ct-enemy">
+      <div class="ct-head"><span class="ct-name">${c.enemy.name}</span><span class="ct-hp" data-ehp></span></div>
+      <div class="ct-bar"><i data-ebar style="background:var(--bad)"></i></div>
+      <div class="ct-shields" data-eshield></div>
+      <div class="ct-label">Target a system</div>
+      <div class="ct-sysgrid">${sysBtns}</div>
+    </div>
+
+    <div class="ct-us">
+      <div class="ct-head"><span class="ct-name">Your Ship</span><span class="ct-hp" data-ohp></span></div>
+      <div class="ct-bar"><i data-obar style="background:var(--good)"></i></div>
+      <div class="ct-shields" data-oshield></div>
+      <div class="ct-row"><span>Weapon</span><span class="ct-charge" data-charge></span></div>
+      <div class="ct-bar thin"><i data-cbar style="background:var(--warn)"></i></div>
+      <div class="ct-row"><span>Evasion</span><span data-evade></span></div>
+    </div>
+
+    <div class="ct-power">
+      <div class="ct-label">Reactor power <span data-pipfree class="muted"></span></div>
+      ${pipRows}
+    </div>
+
+    <div class="ct-actions">
+      <button class="btn small" data-act="pause"></button>
+      <button class="btn small" data-act="flee"></button>
+    </div>
+    <div class="ct-flee-bar hidden" data-fleewrap><i data-fleebar></i></div>
+    <div class="ct-log" data-ctlog></div>
+  `;
+}
+
+function pipDots(n, max) { return '●'.repeat(n) + '○'.repeat(Math.max(0, max - n)); }
+
+function renderCombatPanel() {
+  const c = GAME.combat;
+  const panel = $('#combat-panel');
+  if (!panel || !c) return;
+  const key = c.enemyType + '|' + c.enemy.systems.map(s => s.sys).join(',');
+  if (_combatUiKey !== key) {
+    panel.innerHTML = combatSkeleton(c);
+    _combatUiKey = key;
+  }
+  const q = (sel) => panel.querySelector(sel);
+  const e = c.enemy;
+
+  // --- enemy ---
+  q('[data-ehp]').textContent = `${Math.ceil(e.integrity)} / ${e.integrityMax}`;
+  q('[data-ebar]').style.width = (e.integrity / e.integrityMax * 100) + '%';
+  q('[data-eshield]').textContent = e.shieldLayersMax
+    ? `Shields ${pipDots(e.shieldLayers, e.shieldLayersMax)}` : 'No shields';
+  panel.querySelectorAll('[data-target]').forEach(btn => {
+    const sys = btn.dataset.target;
+    const obj = e.systems.find(s => s.sys === sys);
+    btn.classList.toggle('targeted', c.targetSys === sys);
+    btn.classList.toggle('down', !!obj?.disabled);
+    btn.querySelector('.ct-sys-state').textContent = obj?.disabled ? 'OFFLINE' : '';
+  });
+
+  // --- us ---
+  const maxI = maxIntegrity();
+  q('[data-ohp]').textContent = `${Math.ceil(GAME.integrity)} / ${maxI}`;
+  q('[data-obar]').style.width = (GAME.integrity / maxI * 100) + '%';
+  const sCap = ourShieldCap();
+  q('[data-oshield]').textContent = sCap
+    ? `Shields ${pipDots(c.shieldLayers, sCap)}`
+    : (roomsOfType('shields')[0] ? 'Shields unpowered' : 'No shield generator');
+
+  // weapon charge — explain plainly when it isn't firing, that's the #1 confusion
+  const wRoom = roomsOfType('weapons')[0];
+  let chargeTxt = 'No weapons bay', frac = 0;
+  if (wRoom) {
+    if (wRoom.disabled) chargeTxt = 'WRECKED';
+    else if (c.pips.weapons < 1) chargeTxt = 'Unpowered — assign a pip';
+    else if (staffOn(wRoom.id) <= 0) chargeTxt = 'Unmanned — send a gunner';
+    else {
+      const need = ourChargeSec(wRoom);
+      frac = Math.min(1, c.weaponTimer / need);
+      chargeTxt = `${(need - c.weaponTimer).toFixed(1)}s · ${ourShotDamage(wRoom).toFixed(1)} dmg`;
+    }
+  }
+  q('[data-charge]').textContent = chargeTxt;
+  q('[data-cbar]').style.width = (frac * 100) + '%';
+  q('[data-evade]').textContent = Math.round(ourEvasion() * 100) + '%';
+
+  // --- power pips ---
+  q('[data-pipfree]').textContent = `${pipsFree()} free of ${c.pipsTotal}`;
+  PIP_SYS.forEach(p => {
+    const capFor = p.key === 'shields' ? Math.max(shieldLayersMax(), c.pips.shields) : c.pipsTotal;
+    panel.querySelector(`[data-pips="${p.key}"]`).textContent = pipDots(c.pips[p.key], Math.min(capFor, c.pipsTotal));
+  });
+
+  // --- actions ---
+  q('[data-act="pause"]').textContent = GAME.paused ? '▶ Resume' : '❚❚ Pause';
+  const fleeBtn = q('[data-act="flee"]');
+  fleeBtn.textContent = c.fleeing ? '✕ Cancel jump' : `⟶ Flee (${CONFIG.combat.fleeFuelCost} fuel)`;
+  fleeBtn.classList.toggle('primary', c.fleeing);
+  q('[data-fleewrap]').classList.toggle('hidden', !c.fleeing);
+  if (c.fleeing) q('[data-fleebar]').style.width = (c.jumpCharge * 100) + '%';
+
+  // --- feed ---
+  q('[data-ctlog]').innerHTML = c.log.slice(0, 8)
+    .map(l => `<div class="ct-line ${l.kind}">${l.text}</div>`).join('');
 }
 
 /* ============================================================

@@ -283,6 +283,45 @@ body {
 .storage-panel { display: flex; flex-direction: column; gap: 8px; }
 .storage-panel.hidden { display: none; }
 .crew-list.hidden { display: none; }
+
+/* ---- combat panel (takes over the crew pane during a fight) ---- */
+.combat-panel { display: flex; flex-direction: column; gap: 10px; }
+.combat-panel.hidden { display: none; }
+.ct-enemy, .ct-us, .ct-power { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.ct-enemy { border-color: rgba(255,107,107,.3); }
+.ct-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.ct-name { font-weight: 600; letter-spacing: .3px; }
+.ct-hp { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ct-bar { height: 8px; background: rgba(255,255,255,.07); border-radius: 6px; overflow: hidden; }
+.ct-bar.thin { height: 5px; }
+.ct-bar > i { display: block; height: 100%; border-radius: 6px; transition: width .12s linear; }
+.ct-shields { font-size: 11px; color: var(--accent); margin-top: 5px; letter-spacing: 1px; }
+.ct-label { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 9px 0 6px; }
+.ct-sysgrid { display: flex; flex-wrap: wrap; gap: 6px; }
+.ct-sys { flex: 1 1 30%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 6px; cursor: pointer; color: var(--text); font: inherit; font-size: 11px; text-align: center; }
+.ct-sys:hover { border-color: rgba(255,255,255,.3); }
+.ct-sys.targeted { border-color: var(--bad); background: rgba(255,107,107,.13); box-shadow: 0 0 0 1px rgba(255,107,107,.3); }
+.ct-sys.down { opacity: .5; }
+.ct-sys-name { display: block; }
+.ct-sys-state { display: block; font-size: 9px; color: var(--good); letter-spacing: .5px; min-height: 11px; }
+.ct-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 8px 0 4px; }
+.ct-charge { color: var(--warn); font-variant-numeric: tabular-nums; }
+.pip-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.pip-name { font-size: 11px; width: 58px; }
+.pip-dots { flex: 1; letter-spacing: 3px; font-size: 12px; color: var(--muted); }
+.pip-btns { display: flex; gap: 4px; }
+.pip-btn { padding: 1px 8px; font-size: 13px; line-height: 1.3; }
+.ct-actions { display: flex; gap: 8px; }
+.ct-actions .btn { flex: 1; }
+.ct-flee-bar { height: 6px; background: rgba(255,255,255,.07); border-radius: 6px; overflow: hidden; }
+.ct-flee-bar.hidden { display: none; }
+.ct-flee-bar > i { display: block; height: 100%; background: var(--warn); border-radius: 6px; transition: width .12s linear; }
+.ct-log { max-height: 132px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.ct-line { font-size: 11px; color: var(--muted); }
+.ct-line.good { color: var(--good); }
+.ct-line.bad { color: var(--bad); }
+.ct-line.warn { color: var(--warn); }
 .stor-row {
   display: grid; grid-template-columns: 70px 1fr 70px 52px;
   align-items: center; gap: 8px; font-size: 12px;
