@@ -130,6 +130,12 @@ function init() {
   // click backdrop to close modal
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
 
+  // sector-map cards (delegated — the modal body is rebuilt on every open)
+  $('#modal-card').addEventListener('click', e => {
+    const id = e.target.closest('[data-travel]')?.dataset.travel;
+    if (id) confirmTravel(id);
+  });
+
   // save on exit
   window.addEventListener('beforeunload', saveGame);
 

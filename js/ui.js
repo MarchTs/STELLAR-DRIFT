@@ -319,10 +319,10 @@ function renderLog() {
 /* ---------------- buttons state ---------------- */
 function renderControls() {
   const btnJump = $('#btn-jump');
-  btnJump.disabled = !canJump();
-  btnJump.textContent = `Jump ⟶ (${jumpFuelCost()} fuel)`;
+  btnJump.disabled = !!GAME.combat;                 // no plotting a course mid-fight
+  btnJump.textContent = `🗺 Sector Map (${jumpFuelCost()} fuel)`;
   const low = GAME.stock && (GAME.stock.minerals < 30 || GAME.stock.ice < 30);
-  btnJump.classList.toggle('flash', low && !GAME.atStation);
+  btnJump.classList.toggle('flash', low && !GAME.atStation && canJump());
   const synth = $('#btn-synth');
   if (synth) {
     synth.disabled = !canSynthFuel();
@@ -366,54 +366,114 @@ function renderControls() {
 }
 
 /* ---------------- jump: choose the next sector ---------------- */
-let jumpOptions = null;
 let stationPrices = null;
 
-function openJumpModal() {
-  if (!canJump()) return;
-  jumpOptions = generateJumpOptions();
-  const cost = jumpFuelCost();
-  const cards = jumpOptions.map((o, i) => {
-    if (o.type === 'station') {
-      return `<div class="upg station-card">
-        <div class="u-top"><span class="u-name" style="color:var(--warn)">◉ Space Station</span><span class="u-cat">Sector ${o.sector}</span></div>
-        <div class="u-desc">A neutral trade outpost. Sell surplus resources for SD or restock what you need.</div>
-        <div class="u-blurb">Trades: minerals · ice · water · food · fuel</div>
-        <div class="u-foot"><span class="u-cost" style="color:var(--fuel)">${cost} fuel</span>
-          <button class="btn small primary" onclick="confirmJump(${i})">Dock Here</button></div>
-      </div>`;
-    }
-    const c = CONDITIONS[o.condition];
-    return `<div class="upg ${c.tone === 'risk' ? 'risk-card' : ''}">
-      <div class="u-top"><span class="u-name cond-${c.tone}">${c.icon} ${c.name}</span><span class="u-cat">Sector ${o.sector}</span></div>
-      <div class="u-desc">${c.desc}</div>
-      ${c.reward ? `<div class="reward-line">★ Reward: ${c.reward}</div>` : ''}
-      <div class="u-blurb">Stock: <b style="color:var(--minerals)">${fmt(o.stock.minerals)}</b> ore · <b style="color:var(--ice)">${fmt(o.stock.ice)}</b> ice</div>
-      <div class="u-foot"><span class="u-cost" style="color:var(--fuel)">${cost} fuel</span>
-        <button class="btn small primary" onclick="confirmJump(${i})">Jump here</button></div>
-    </div>`;
-  }).join('');
-  openModal(`<span class="close" onclick="closeModal()">×</span>
-    <h2>Plot a Jump</h2>
-    <p class="muted">Scanners found ${jumpOptions.length} reachable sectors. Each jump costs <b style="color:var(--fuel)">${cost} fuel</b> (you have ${fmt(GAME.resources.fuel)}). Deeper space is more hostile.</p>
-    <div class="upg-grid">${cards}</div>
-    <div class="row-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>`);
+/* ---------------- sector map ----------------
+   Known space drawn as columns by depth: where you've been on the left, the
+   frontier on the right. Travel to anywhere visited, or adjacent to visited. */
+function sectorCardHtml(n) {
+  const here = n.id === GAME.sectorNode;
+  const reachable = canTravelTo(n.id);
+  const d = SECTOR_DIFFICULTY[n.difficulty] || SECTOR_DIFFICULTY[1];
+  const c = sectorCondition(n);
+  const station = n.type === 'station';
+  const stash = hasStash(n.id);
+
+  const cls = ['smap-card'];
+  if (here) cls.push('here');
+  else if (reachable) cls.push('reachable');
+  else cls.push('locked');
+  if (station) cls.push('station');
+
+  const sub = station
+    ? 'Trade outpost'
+    : `${c.icon} ${c.name}`;
+  const stockLine = station
+    ? '<div class="smap-stock">Buys &amp; sells cargo</div>'
+    : `<div class="smap-stock"><b style="color:var(--minerals)">${fmt(n.stock.minerals)}</b> ore · <b style="color:var(--ice)">${fmt(n.stock.ice)}</b> ice</div>`;
+
+  return `<div class="${cls.join(' ')}" ${reachable ? `data-travel="${n.id}"` : ''}>
+    <div class="smap-top">
+      <span class="smap-name">${station ? '◉ ' : ''}${n.name}</span>
+      ${stash ? '<span class="smap-stash" title="Crew or cargo waiting here">📦</span>' : ''}
+    </div>
+    <div class="smap-diff cond-${d.tone}">${station ? '—' : d.stars + ' ' + d.label}</div>
+    <div class="smap-sub">${sub}</div>
+    ${stockLine}
+    <div class="smap-foot">${here ? '<span class="smap-here">You are here</span>'
+      : reachable ? `<span class="smap-go">${n.visited ? 'Return' : 'Travel'} →</span>`
+      : '<span class="smap-lock">Unscanned</span>'}</div>
+  </div>`;
 }
 
-function confirmJump(i) {
-  const opt = jumpOptions && jumpOptions[i];
-  if (!opt) return;
-  const result = doJumpTo(opt);
+function openSectorMapModal() {
+  ensureSectorMap();
+  const known = knownSectors();
+  const byDepth = {};
+  known.forEach(n => { (byDepth[n.depth] = byDepth[n.depth] || []).push(n); });
+  const depths = Object.keys(byDepth).map(Number).sort((a, b) => a - b);
+
+  const cols = depths.map(d => `
+    <div class="smap-col">
+      <div class="smap-colhead">Sector ${d}</div>
+      ${byDepth[d].sort((a, b) => a.id.localeCompare(b.id)).map(sectorCardHtml).join('')}
+    </div>`).join('<div class="smap-link"></div>');
+
+  const cost = jumpFuelCost();
+  const canGo = canJump();
+  const hereStash = hasStash(GAME.sectorNode);
+
+  openModal(`<span class="close" onclick="closeModal()">×</span>
+    <h2>Sector Map</h2>
+    <p class="muted">Each jump costs <b style="color:var(--fuel)">${cost} fuel</b> (you have ${fmt(GAME.resources.fuel)}).
+      Riskier space carries more cargo. You can return to anywhere you've already been.</p>
+    ${canGo ? '' : `<p class="smap-warn">Not enough fuel to jump — synthesise more first.</p>`}
+    ${hereStash ? `<div class="smap-collect">📦 Something is waiting here.
+      <button class="btn small primary" onclick="doCollectStash()">Collect</button></div>` : ''}
+    <div class="smap-scroll"><div class="smap-grid">${cols}</div></div>
+    <div class="row-actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
+}
+
+// kept as the old entry point name so existing wiring keeps working
+function openJumpModal() { openSectorMapModal(); }
+
+function doCollectStash() {
+  if (collectStash()) { renderAll(); openSectorMapModal(); }
+}
+
+let _pendingTravel = null;
+function confirmTravel(id) {
+  const n = sectorNode(id);
+  if (!n || !canTravelTo(id)) return;
+  if (!canJump()) { logMsg('Not enough fuel to jump.', 'bad'); return; }
+  _pendingTravel = id;
+  const d = SECTOR_DIFFICULTY[n.difficulty] || SECTOR_DIFFICULTY[1];
+  const c = sectorCondition(n);
+  openModal(`<h2>${n.type === 'station' ? '◉ ' : ''}${n.name}</h2>
+    <p class="muted">Sector ${n.depth} · ${n.type === 'station' ? 'Trade outpost' : `${d.stars} ${d.label} · ${c.name}`}</p>
+    ${n.type === 'station' ? '<p>Dock to trade cargo for SD, buy blueprints and recruit crew.</p>'
+      : `<p>${c.desc}</p>
+         <p class="muted">Cargo in reach: <b style="color:var(--minerals)">${fmt(n.stock.minerals)}</b> ore ·
+           <b style="color:var(--ice)">${fmt(n.stock.ice)}</b> ice</p>`}
+    <p>Jumping costs <b style="color:var(--fuel)">${jumpFuelCost()} fuel</b>.</p>
+    <div class="row-actions">
+      <button class="btn primary" onclick="doTravel()">${n.type === 'station' ? 'Dock here' : 'Jump here'}</button>
+      <button class="btn" onclick="openSectorMapModal()">Back to map</button>
+    </div>`);
+}
+
+function doTravel() {
+  const id = _pendingTravel;
+  _pendingTravel = null;
+  if (!id) return;
+  const result = travelTo(id);
+  if (!result) return;
+  triggerJumpFlash();
+  closeModal();
+  renderAll();
   if (result === 'station') {
-    triggerJumpFlash();
-    closeModal();
-    renderAll();
     stationPrices = generateStationPrices();
     openStationModal();
-  } else if (result) {
-    triggerJumpFlash();
-    closeModal();
-    renderAll();
   }
 }
 

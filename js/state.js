@@ -108,6 +108,8 @@ function loadGame() {
     if (GAME && !GAME.challenge) GAME.challenge = 'standard';
     if (GAME && GAME.sd === undefined) GAME.sd = 0;
     if (GAME && GAME.atStation === undefined) GAME.atStation = false;
+    if (GAME && !GAME.sectorStash) GAME.sectorStash = {};
+    ensureSectorMap();                        // build a map for pre-map saves
     if (GAME && GAME.combat === undefined) GAME.combat = null;
     if (GAME && GAME.integrity === undefined) GAME.integrity = CONFIG.combat.integrityBase;
     if (GAME) GAME.integrity = Math.min(GAME.integrity, maxIntegrity());

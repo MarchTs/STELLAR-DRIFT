@@ -284,6 +284,35 @@ body {
 .storage-panel.hidden { display: none; }
 .crew-list.hidden { display: none; }
 
+/* ---- sector map (branching travel tree) ---- */
+.smap-scroll { overflow-x: auto; padding: 4px 2px 10px; }
+.smap-grid { display: flex; align-items: flex-start; gap: 0; min-width: min-content; }
+.smap-col { display: flex; flex-direction: column; gap: 8px; min-width: 165px; }
+.smap-colhead { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
+  text-align: center; padding-bottom: 2px; }
+.smap-link { width: 26px; align-self: stretch; position: relative; }
+.smap-link::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(150,170,200,.35), transparent); }
+.smap-card { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; }
+.smap-card.reachable { cursor: pointer; }
+.smap-card.reachable:hover { border-color: var(--accent); background: rgba(92,200,255,.08); }
+.smap-card.here { border-color: var(--good); box-shadow: 0 0 0 1px rgba(122,214,122,.3); }
+.smap-card.locked { opacity: .45; }
+.smap-card.station { border-color: rgba(255,206,92,.4); }
+.smap-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.smap-name { font-weight: 600; font-size: 12px; }
+.smap-stash { font-size: 11px; }
+.smap-diff { font-size: 10px; margin-top: 3px; letter-spacing: .3px; }
+.smap-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.smap-stock { font-size: 10px; color: var(--muted); margin-top: 5px; }
+.smap-foot { margin-top: 7px; font-size: 10px; }
+.smap-here { color: var(--good); }
+.smap-go { color: var(--accent); }
+.smap-lock { color: var(--muted); }
+.smap-warn { color: var(--bad); font-size: 12px; }
+.smap-collect { display: flex; align-items: center; gap: 10px; background: var(--panel2);
+  border: 1px solid rgba(255,206,92,.35); border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-size: 12px; }
+
 /* ---- combat panel (takes over the crew pane during a fight) ---- */
 .combat-panel { display: flex; flex-direction: column; gap: 10px; }
 .combat-panel.hidden { display: none; }
