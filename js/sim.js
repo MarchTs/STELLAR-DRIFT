@@ -13,10 +13,12 @@ function newRun(challengeId) {
   const used = new Set();
   crew.forEach(c => { let n = 0; while (used.has(c.name) && n++ < 50) c.name = pick(CREW_NAMES); used.add(c.name); });
 
-  // bays are column-major (even = top, odd = bottom): production across the top row.
+  // bays are column-major (even = top, odd = bottom): production across the top row,
+  // crew/combat along the bottom. A Weapons Bay ships as standard so the first pirate
+  // encounter is winnable instead of forcing a flee.
   const rooms = [
     makeRoom('reactor', 0), makeRoom('lifesupport', 2), makeRoom('extractor', 4),
-    makeRoom('hydroponics', 6), makeRoom('quarters', 1),
+    makeRoom('hydroponics', 6), makeRoom('quarters', 1), makeRoom('weapons', 3),
   ];
 
   const resMult = ch.resourceMult || 1;
@@ -38,7 +40,7 @@ function newRun(challengeId) {
     roomsBuilt: 0,
     gameOver: false,
     paused: false,
-    hullTier: 1,
+    hullTier: 2,          // 10 bays to start — combat modules need the room
     condition: 'calm',
     stock: rollSectorStock(1),
     sd: 0,
