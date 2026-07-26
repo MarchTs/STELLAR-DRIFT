@@ -172,7 +172,7 @@ function renderShip() {
     ? `<b style="color:var(--warn)">${sel.name} selected</b> — click a module to post them there, or press Esc to cancel.`
     : shipFull()
       ? `All ${maxRooms()} bays occupied — demolish a module or expand the hull.`
-      : `▦ Click a crew to give orders, or an empty bay to build a module.`;
+      : `▦ Click or drag a crew to post them, or click an empty bay to build.`;
   const hullLink = hullTier() < CONFIG.hull.maxTier
     ? `<button class="btn small ghost tray-hull" onclick="openHullModal()">⊕ Expand Hull</button>` : '';
   const html = `<div class="tray-msg">${msg}</div>${hullLink}`;

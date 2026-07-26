@@ -371,7 +371,10 @@ const STATE_BADGE = { sleeping: 'z', eating: '◦', healing: '✚', repairing: '
 
 let STARS = null, hoverBay = -1, jumpFlash = 0;
 // FTL-style select-then-command: click a crew, then click a room to post them there.
+// Dragging a crew onto a module does the same thing in one gesture.
 let selectedCrewId = null, hoverCrew = null;
+let dragCrewId = null, dragPx = null, dragMoved = false, suppressClick = false;
+const DRAG_THRESHOLD = 5;      // px of movement before a press counts as a drag
 function selectCrew(id) {
   selectedCrewId = id || null;
   renderAll();             // refresh the card highlight and the order hint
@@ -464,11 +467,20 @@ function drawShip() {
     ctx.fillText('BUILD', (b.x0 + (b.x1 - b.x0 + 1) / 2) * TILE, b.y0 * TILE + 2);
   }
 
-  // hover highlight (occupied or empty bay)
+  // hover highlight (occupied or empty bay). While dragging or with a crew selected
+  // it doubles as the drop target: green = will accept, red = no station here.
   if (hoverBay >= 0 && hoverBay < bayCount()) {
     const b = bayRect(hoverBay);
-    ctx.strokeStyle = 'rgba(92,200,255,.7)'; ctx.lineWidth = 2;
+    const commanding = (dragCrewId && dragMoved) || selectedCrewId;
+    const ok = bayAcceptsCrew(hoverBay);
+    ctx.strokeStyle = commanding ? (ok ? 'rgba(122,214,122,.9)' : 'rgba(255,107,107,.75)')
+                                 : 'rgba(92,200,255,.7)';
+    ctx.lineWidth = commanding && ok ? 3 : 2;
     ctx.strokeRect(b.x0 * TILE + 1, b.y0 * TILE + 1, (b.x1 - b.x0 + 1) * TILE - 2, (b.y1 - b.y0 + 1) * TILE - 2);
+    if (commanding && ok) {
+      ctx.fillStyle = 'rgba(122,214,122,.10)';
+      ctx.fillRect(b.x0 * TILE + 1, b.y0 * TILE + 1, (b.x1 - b.x0 + 1) * TILE - 2, (b.y1 - b.y0 + 1) * TILE - 2);
+    }
   }
 
   // stations, beds & labels
@@ -505,6 +517,7 @@ function drawShip() {
 
   // pawns
   Object.values(PAWNS).forEach(p => drawPawn(ctx, p));
+  drawDragGhost(ctx);
 
   ctx.restore();   // end hull translate
 
@@ -540,10 +553,44 @@ function drawHazard(ctx, ev) {
   }
 }
 
+// Translucent copy of the dragged crew, following the cursor, with a line back to
+// where they actually are. Drawn on top of everything else on the deck.
+function drawDragGhost(ctx) {
+  if (!dragCrewId || !dragMoved || !dragPx) return;
+  const src = PAWNS[dragCrewId];
+  const crew = GAME.crew.find(c => c.id === dragCrewId);
+  if (!src || !crew) return;
+  const ok = bayAcceptsCrew(hoverBay);
+
+  ctx.save();
+  // tether from the real pawn to the ghost
+  ctx.strokeStyle = 'rgba(255,210,92,.35)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(src.px, src.py); ctx.lineTo(dragPx.px, dragPx.py); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.globalAlpha = 0.72;
+  // body
+  ctx.fillStyle = crew.color || '#5cc8ff';
+  ctx.beginPath(); ctx.arc(dragPx.px, dragPx.py, 9, 0, 7); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = ok ? '#7ad67a' : 'rgba(6,18,31,.75)'; ctx.stroke();
+  // initial
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#06121f'; ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText((crew.name || '?')[0], dragPx.px, dragPx.py);
+  // drop affordance
+  ctx.font = 'bold 10px sans-serif'; ctx.fillStyle = ok ? '#7ad67a' : '#ff6b6b';
+  ctx.fillText(ok ? '✓' : '✕', dragPx.px + 11, dragPx.py - 10);
+  ctx.restore();
+}
+
 function drawPawn(ctx, p) {
   const color = p.color || '#5cc8ff';
   const bob = p.running ? Math.sin(performance.now() / 90 + p.px) * 2.5 : 0;
   const y = p.py + bob;
+  // the crew being dragged is shown faded in place; the ghost is the live one
+  const beingDragged = p.id && p.id === dragCrewId && dragMoved;
+  if (beingDragged) { ctx.save(); ctx.globalAlpha = 0.3; }
 
   // floor shadow
   ctx.fillStyle = 'rgba(0,0,0,.45)';
@@ -575,6 +622,8 @@ function drawPawn(ctx, p) {
     ctx.fillStyle = '#cdd9ee'; ctx.font = 'bold 10px sans-serif';
     ctx.fillText(badge, p.px + 10, y - 9);
   }
+
+  if (beingDragged) ctx.restore();
 }
 
 /* ---------------- interaction ---------------- */
@@ -616,23 +665,78 @@ function crewAtPx(px, py) {
   return best;
 }
 
+// Post a crew to whatever module sits in `bay`. Shared by click-to-command and drag-drop.
+// Returns true if the order landed.
+function postCrewToBay(crewId, bay) {
+  const room = bay >= 0 ? roomInBay(bay) : null;
+  if (!room) return false;
+  if (!isStationable(room.type)) {
+    logMsg(`${ROOM_DEFS[room.type].name} has no station to work.`, 'warn');
+    return false;
+  }
+  assignCrewTo(crewId, room.id);
+  return true;
+}
+// Can this bay accept a crew right now? Drives the drop-target highlight.
+function bayAcceptsCrew(bay) {
+  const room = bay >= 0 ? roomInBay(bay) : null;
+  return !!room && isStationable(room.type);
+}
+
 function initShip() {
   setupCanvas();
   ensureLayout();
   const cv = document.querySelector('#ship-canvas');
   if (!cv) return;
+
+  cv.onmousedown = e => {
+    if (e.button !== 0) return;
+    const { px, py } = eventPx(cv, e);
+    const hit = crewAtPx(px, py);
+    if (!hit) return;
+    dragCrewId = hit.id; dragPx = { px, py }; dragMoved = false;
+    e.preventDefault();                       // don't start a text selection
+  };
+
   cv.onmousemove = e => {
     const { tx, ty } = eventTile(cv, e);
     const { px, py } = eventPx(cv, e);
     hoverBay = bayAtTile(tx, ty);
+
+    if (dragCrewId) {                         // mid-drag: track the ghost, ignore hover
+      if (Math.hypot(px - dragPx.px, py - dragPx.py) > DRAG_THRESHOLD) dragMoved = true;
+      dragPx = { px, py };
+      hoverCrew = null;
+      cv.style.cursor = dragMoved ? (bayAcceptsCrew(hoverBay) ? 'copy' : 'not-allowed') : 'pointer';
+      drawShip();                             // keep the ghost glued to the cursor
+      return;
+    }
     hoverCrew = crewAtPx(px, py);
     // with a crew selected, the ship becomes a command surface
-    cv.style.cursor = hoverCrew ? 'pointer'
-      : selectedCrewId ? (hoverBay >= 0 && roomInBay(hoverBay) ? 'crosshair' : 'default')
+    cv.style.cursor = hoverCrew ? 'grab'
+      : selectedCrewId ? (bayAcceptsCrew(hoverBay) ? 'crosshair' : 'default')
       : hoverBay >= 0 ? 'pointer' : 'default';
   };
-  cv.onmouseleave = () => { hoverBay = -1; hoverCrew = null; };
+
+  cv.onmouseup = e => {
+    if (!dragCrewId) return;
+    const wasDrag = dragMoved, id = dragCrewId;
+    const { tx, ty } = eventTile(cv, e);
+    dragCrewId = null; dragPx = null; dragMoved = false;
+    if (!wasDrag) return;                     // a tap, not a drag — let onclick handle it
+    suppressClick = true;                     // ...otherwise swallow the click that follows
+    if (postCrewToBay(id, bayAtTile(tx, ty))) selectCrew(null);
+    renderAll(); drawShip();
+  };
+
+  // leaving the canvas (or releasing outside it) cancels the drag
+  cv.onmouseleave = () => {
+    hoverBay = -1; hoverCrew = null;
+    if (dragCrewId) { suppressClick = dragMoved; dragCrewId = null; dragPx = null; dragMoved = false; drawShip(); }
+  };
+
   cv.onclick = e => {
+    if (suppressClick) { suppressClick = false; return; }
     const { tx, ty } = eventTile(cv, e);
     const { px, py } = eventPx(cv, e);
 
@@ -650,14 +754,8 @@ function initShip() {
 
     // 2. with a crew selected, clicking a room posts them there
     if (selectedCrewId && room) {
-      if (isStationable(room.type)) {
-        assignCrewTo(selectedCrewId, room.id);
-        selectCrew(null);
-        renderAll();
-      } else {
-        logMsg(`${ROOM_DEFS[room.type].name} has no station to work.`, 'warn');
-        selectCrew(null);
-      }
+      if (postCrewToBay(selectedCrewId, i)) renderAll();
+      selectCrew(null);
       return;
     }
     // 3. clicking empty space clears the selection instead of opening anything
