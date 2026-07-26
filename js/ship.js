@@ -308,7 +308,7 @@ function updateShip(dt) {
       else { p.px += dx / d * budget; p.py += dy / d * budget; budget = 0; }
     }
     p.running = p.path.length > 0;
-    p.state = c.state; p.color = c.color; p.name = c.name;
+    p.state = c.state; p.color = c.color; p.name = c.name; p.id = c.id;
     // crew only "operate" (produce/rest/eat/heal) once physically at their target tile
     c.atStation = p.path.length === 0 && Math.abs(p.px - (tt.x + 0.5) * TILE) < 10 && Math.abs(p.py - (tt.y + 0.5) * TILE) < 10;
   });
@@ -370,6 +370,13 @@ const ROOM_ACCENT = {
 const STATE_BADGE = { sleeping: 'z', eating: '◦', healing: '✚', repairing: '🔧' };
 
 let STARS = null, hoverBay = -1, jumpFlash = 0;
+// FTL-style select-then-command: click a crew, then click a room to post them there.
+let selectedCrewId = null, hoverCrew = null;
+function selectCrew(id) {
+  selectedCrewId = id || null;
+  renderAll();             // refresh the card highlight and the order hint
+  drawShip();
+}
 function triggerJumpFlash() { jumpFlash = 0.9; }   // seconds of warp flash
 
 /* ---------------- drawing ---------------- */
@@ -542,6 +549,16 @@ function drawPawn(ctx, p) {
   ctx.fillStyle = 'rgba(0,0,0,.45)';
   ctx.beginPath(); ctx.ellipse(p.px, p.py + 8, 8, 3, 0, 0, 7); ctx.fill();
 
+  // selection / hover ring
+  const isSel = p.id && p.id === selectedCrewId;
+  const isHover = p.id && hoverCrew && p.id === hoverCrew.id;
+  if (isSel || isHover) {
+    const pulse = isSel ? 1.5 + Math.sin(performance.now() / 220) * 1.2 : 0;
+    ctx.strokeStyle = isSel ? '#ffd25c' : 'rgba(255,255,255,.55)';
+    ctx.lineWidth = isSel ? 2.5 : 1.5;
+    ctx.beginPath(); ctx.arc(p.px, y, 13 + pulse, 0, 7); ctx.stroke();
+  }
+
   // body
   ctx.save(); ctx.translate(p.px, y); if (p.facing < 0) ctx.scale(-1, 1);
   ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, 0, 9, 0, 7); ctx.fill();
@@ -579,6 +596,26 @@ function bayAtTile(tx, ty) {
   return -1;
 }
 
+// hull-local pixel coords (the space PAWNS live in), for hit-testing crew
+function eventPx(cv, e) {
+  const rect = cv.getBoundingClientRect();
+  return {
+    px: (e.clientX - rect.left) / rect.width * canvasW() - MARGIN_X,
+    py: (e.clientY - rect.top) / rect.height * CANVAS_H - MARGIN_Y,
+  };
+}
+// nearest living crew whose pawn is under the cursor
+function crewAtPx(px, py) {
+  let best = null, bestD = 16 * 16;        // generous grab radius (pawn is r=9)
+  aliveCrew().forEach(c => {
+    const p = PAWNS[c.id];
+    if (!p) return;
+    const d = (p.px - px) ** 2 + (p.py - py) ** 2;
+    if (d < bestD) { bestD = d; best = c; }
+  });
+  return best;
+}
+
 function initShip() {
   setupCanvas();
   ensureLayout();
@@ -586,17 +623,49 @@ function initShip() {
   if (!cv) return;
   cv.onmousemove = e => {
     const { tx, ty } = eventTile(cv, e);
+    const { px, py } = eventPx(cv, e);
     hoverBay = bayAtTile(tx, ty);
-    cv.style.cursor = hoverBay >= 0 ? 'pointer' : 'default';
+    hoverCrew = crewAtPx(px, py);
+    // with a crew selected, the ship becomes a command surface
+    cv.style.cursor = hoverCrew ? 'pointer'
+      : selectedCrewId ? (hoverBay >= 0 && roomInBay(hoverBay) ? 'crosshair' : 'default')
+      : hoverBay >= 0 ? 'pointer' : 'default';
   };
-  cv.onmouseleave = () => { hoverBay = -1; };
+  cv.onmouseleave = () => { hoverBay = -1; hoverCrew = null; };
   cv.onclick = e => {
     const { tx, ty } = eventTile(cv, e);
+    const { px, py } = eventPx(cv, e);
+
+    // 1. clicking the selected crew's own pawn cancels the order
+    const hit = crewAtPx(px, py);
+    if (hit && hit.id === selectedCrewId) { selectCrew(null); return; }
+    // ...and with nobody selected, clicking a crew picks them up.
+    // Note this is skipped once a selection is active: otherwise a crew standing
+    // in the target room would swallow the click and re-select instead of the
+    // order going through. Switch crew via their card, or Esc first.
+    if (hit && !selectedCrewId) { selectCrew(hit.id); return; }
+
     const i = bayAtTile(tx, ty);
+    const room = i >= 0 ? roomInBay(i) : null;
+
+    // 2. with a crew selected, clicking a room posts them there
+    if (selectedCrewId && room) {
+      if (isStationable(room.type)) {
+        assignCrewTo(selectedCrewId, room.id);
+        selectCrew(null);
+        renderAll();
+      } else {
+        logMsg(`${ROOM_DEFS[room.type].name} has no station to work.`, 'warn');
+        selectCrew(null);
+      }
+      return;
+    }
+    // 3. clicking empty space clears the selection instead of opening anything
+    if (selectedCrewId) { selectCrew(null); return; }
+
     if (i < 0) return;
-    const room = roomInBay(i);
-    if (room) openRoomDetail(room.id);     // occupied bay -> manage module
-    else openBuildModal(i);                // empty bay -> build menu
+    if (room) openRoomDetail(room.id);      // occupied bay -> manage module
+    else openBuildModal(i);                 // empty bay -> build menu
   };
   updateShip(0.001);
   drawShip();

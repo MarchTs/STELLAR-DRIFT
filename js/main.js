@@ -94,7 +94,15 @@ function init() {
     const ejectId = e.target.closest('[data-eject]')?.dataset.eject;
     if (ejectId) { ejectCrew(ejectId); return; }
     const unpostId = e.target.closest('[data-unpost]')?.dataset.unpost;
-    if (unpostId) { unassignCrew(unpostId); renderAll(); }
+    if (unpostId) { unassignCrew(unpostId); renderAll(); return; }
+    // clicking the card selects that crew — then click a room to post them
+    const selId = e.target.closest('[data-select]')?.dataset.select;
+    if (selId) selectCrew(selectedCrewId === selId ? null : selId);
+  });
+
+  // Esc clears a crew selection
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && selectedCrewId) selectCrew(null);
   });
 
   // resource flow breakdown on hover

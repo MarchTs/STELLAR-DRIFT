@@ -167,9 +167,12 @@ function renderShip() {
   // empty bay on the ship; here we just show a hint line + the hull-expand button.
   const tray = $('#build-tray');
   if (!tray) return;
-  const msg = shipFull()
-    ? `All ${maxRooms()} bays occupied — demolish a module or expand the hull.`
-    : `▦ Click an empty bay on the ship to build a module.`;
+  const sel = selectedCrewId && GAME.crew.find(c => c.id === selectedCrewId);
+  const msg = sel
+    ? `<b style="color:var(--warn)">${sel.name} selected</b> — click a module to post them there, or press Esc to cancel.`
+    : shipFull()
+      ? `All ${maxRooms()} bays occupied — demolish a module or expand the hull.`
+      : `▦ Click a crew to give orders, or an empty bay to build a module.`;
   const hullLink = hullTier() < CONFIG.hull.maxTier
     ? `<button class="btn small ghost tray-hull" onclick="openHullModal()">⊕ Expand Hull</button>` : '';
   const html = `<div class="tray-msg">${msg}</div>${hullLink}`;
@@ -282,7 +285,8 @@ function renderCrew() {
     const skillChips = SKILL_KEYS.map(k =>
       `<span class="sk ${k === top ? 'top' : ''}" style="--sk:${SKILLS[k].color}" title="${SKILLS[k].name}">${SKILLS[k].name.slice(0, 3)} ${crewSkillLevel(c, k)}</span>`
     ).join('');
-    return `<div class="crew ${dead ? 'dead' : ''}" style="--role:${c.color}">
+    return `<div class="crew ${dead ? 'dead' : ''} ${!dead && c.id === selectedCrewId ? 'selected' : ''}"
+      style="--role:${c.color}" ${dead ? '' : `data-select="${c.id}"`}>
       <div class="crew-top">
         <div><span class="crew-name">${c.name}</span>${(() => {
           if (dead || !c.stationId) return '';
