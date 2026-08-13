@@ -46,6 +46,7 @@ const RES_STORAGE = ['ice', 'ore', 'scrap'];
 
 let lastRates = { power: 0, oxygen: 0, co2: 0, water: 0, ice: 0, minerals: 0, ore: 0, scrap: 0, food: 0, fuel: 0 };
 let hoveredRes = null;
+let hoveredSkill = null;      // { crewId, key } — set on hover, drawn each frame
 let crewPaneTab = 'crew';
 
 /* ---------------- resource flow breakdown (for hover tooltip) ---------------- */
@@ -116,6 +117,37 @@ function renderResTip() {
   tip.style.left = Math.min(r.left, window.innerWidth - 220) + 'px';
   tip.style.top = (r.bottom + 6) + 'px';
   tip.classList.remove('hidden');
+}
+
+/* ---------------- skill chip tooltip ----------------
+   Crew cards are rebuilt every frame, so a plain title= attribute dies mid-hover.
+   Same approach as the resource tooltip: remember what's hovered, redraw each frame. */
+function renderSkillTip() {
+  const tip = $('#skill-tip');
+  if (!tip) return;
+  const chip = hoveredSkill && document.querySelector(
+    `#crew-list .sk[data-crew="${hoveredSkill.crewId}"][data-skill="${hoveredSkill.key}"]`);
+  const crew = hoveredSkill && GAME.crew.find(c => c.id === hoveredSkill.crewId);
+  if (!chip || !crew) { tip.classList.add('hidden'); return; }
+
+  const key = hoveredSkill.key, s = SKILLS[key];
+  const lvl = crewSkillLevel(crew, key);
+  const bonus = Math.round((lvl - 1) * CONFIG.skill.outputPerLevel * 100);
+  const sk = crew.skills[key] || { xp: 0 };
+  const need = CONFIG.skill.xpToLevel * lvl;
+  const maxed = lvl >= CONFIG.skill.maxLevel;
+
+  tip.innerHTML = `<div class="rt-title" style="color:${s.color}">${s.name} · Level ${lvl}</div>
+    <div class="st-use">${s.use}</div>
+    <div class="rt-row"><span>Output bonus</span><span class="${bonus > 0 ? 'up' : ''}">${bonus > 0 ? '+' + bonus + '%' : 'none yet'}</span></div>
+    <div class="rt-row"><span>${maxed ? 'Mastered' : 'To next level'}</span><span>${maxed ? 'max' : Math.max(0, Math.ceil(need - sk.xp)) + ' xp'}</span></div>
+    <div class="st-foot">${crew.name} gains this by working a matching module.</div>`;
+
+  const r = chip.getBoundingClientRect();
+  tip.classList.remove('hidden');
+  const w = tip.offsetWidth || 230;
+  tip.style.left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6)) + 'px';
+  tip.style.top = (r.bottom + 6) + 'px';
 }
 
 /* ---------------- top bar ---------------- */
@@ -283,7 +315,8 @@ function renderCrew() {
     // skill chips: highlight the crew's strongest skill
     const top = SKILL_KEYS.reduce((a, k) => crewSkillLevel(c, k) > crewSkillLevel(c, a) ? k : a, SKILL_KEYS[0]);
     const skillChips = SKILL_KEYS.map(k =>
-      `<span class="sk ${k === top ? 'top' : ''}" style="--sk:${SKILLS[k].color}" title="${SKILLS[k].name}">${SKILLS[k].name.slice(0, 3)} ${crewSkillLevel(c, k)}</span>`
+      `<span class="sk ${k === top ? 'top' : ''}" style="--sk:${SKILLS[k].color}"
+        data-skill="${k}" data-crew="${c.id}">${SKILLS[k].name.slice(0, 3)} ${crewSkillLevel(c, k)}</span>`
     ).join('');
     return `<div class="crew ${dead ? 'dead' : ''} ${!dead && c.id === selectedCrewId ? 'selected' : ''}"
       style="--role:${c.color}" ${dead ? '' : `data-select="${c.id}"`}>
@@ -809,6 +842,7 @@ function renderAll() {
   else if (crewPaneTab === 'crew') renderCrew();
   else renderStoragePanel();
   renderCombatPaneMode();
+  renderSkillTip();
   renderLog();
   renderControls();
 }

@@ -112,6 +112,11 @@ body {
 .res-tip .up { color: var(--good); } .res-tip .down { color: var(--bad); }
 .res-tip .rt-net { display: flex; justify-content: space-between; gap: 12px; margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); font-weight: 700; }
 .res-tip .rt-empty { color: var(--muted); }
+/* skill chip hint */
+#skill-tip { max-width: 245px; }
+#skill-tip .st-use { color: var(--text); margin-bottom: 6px; line-height: 1.45; }
+#skill-tip .st-foot { color: var(--muted); margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--line); font-size: 10px; }
+.sk { cursor: help; }
 
 .top-actions { display: flex; align-items: center; gap: 10px; }
 .cores { display: flex; align-items: center; gap: 5px; font-weight: 700; color: var(--core); font-size: 15px; }

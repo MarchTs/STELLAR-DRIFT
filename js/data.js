@@ -195,10 +195,14 @@ const CONFIG = {
 // the relevant skill makes them more efficient at it.
 // ------------------------------------------------------------
 const SKILLS = {
-  engineering: { name: 'Engineering', color: '#ffb454' },   // reactor, life support, repairs, shields
-  mining:      { name: 'Mining',      color: '#6fd3c7' },   // mining drone
-  botany:      { name: 'Botany',      color: '#9ad36f' },   // hydroponics
-  gunnery:     { name: 'Gunnery',     color: '#ff6b6b' },   // weapons bay (combat only)
+  engineering: { name: 'Engineering', color: '#ffb454',
+    use: 'Reactor, Life Support, Manufactor, Shield Generator — and patching hazards.' },
+  mining:      { name: 'Mining',      color: '#6fd3c7',
+    use: 'Mining Drone — more ore and ice pulled from the sector.' },
+  botany:      { name: 'Botany',      color: '#9ad36f',
+    use: 'Hydroponics — more food grown per tick.' },
+  gunnery:     { name: 'Gunnery',     color: '#ff6b6b',
+    use: 'Weapons Bay — harder hits in combat. Does nothing outside a fight.' },
 };
 const SKILL_KEYS = ['engineering', 'mining', 'botany', 'gunnery'];
 // which skill a module's work draws on (modules not listed need no skilled operator)

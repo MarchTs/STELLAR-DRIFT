@@ -100,6 +100,15 @@ function init() {
     if (selId) selectCrew(selectedCrewId === selId ? null : selId);
   });
 
+  // skill-chip hint. Cards are rebuilt every frame, so track the hovered chip as
+  // state and let renderSkillTip() redraw it — a title= attribute wouldn't survive.
+  const crewEl = $('#crew-list');
+  crewEl.addEventListener('mouseover', e => {
+    const chip = e.target.closest('.sk[data-skill]');
+    hoveredSkill = chip ? { crewId: chip.dataset.crew, key: chip.dataset.skill } : null;
+  });
+  crewEl.addEventListener('mouseleave', () => { hoveredSkill = null; });
+
   // combat panel controls (delegated — the panel is rebuilt once per fight)
   $('#combat-panel').addEventListener('click', e => {
     if (!GAME.combat) return;
