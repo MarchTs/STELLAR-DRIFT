@@ -5,16 +5,20 @@ function newRun(challengeId) {
   const startLevel = ch.startSkill || 3;
   const crewCount = ch.crew || 3;
 
-  // crew specialise round-robin across the skills; anyone can still do any job
+  // crew specialise round-robin across the economy skills; anyone can still do any job.
+  // Gunnery is excluded — it does nothing outside combat, so nobody starts wasted on it.
+  const startSkills = SKILL_KEYS.filter(k => k !== 'gunnery');
   const crew = [];
-  for (let i = 0; i < crewCount; i++) crew.push(makeCrew(SKILL_KEYS[i % SKILL_KEYS.length], startLevel));
+  for (let i = 0; i < crewCount; i++) crew.push(makeCrew(startSkills[i % startSkills.length], startLevel));
   const used = new Set();
   crew.forEach(c => { let n = 0; while (used.has(c.name) && n++ < 50) c.name = pick(CREW_NAMES); used.add(c.name); });
 
-  // bays are column-major (even = top, odd = bottom): production across the top row.
+  // bays are column-major (even = top, odd = bottom): production across the top row,
+  // crew/combat along the bottom. A Weapons Bay ships as standard so the first pirate
+  // encounter is winnable instead of forcing a flee.
   const rooms = [
     makeRoom('reactor', 0), makeRoom('lifesupport', 2), makeRoom('extractor', 4),
-    makeRoom('hydroponics', 6), makeRoom('quarters', 1),
+    makeRoom('hydroponics', 6), makeRoom('quarters', 1), makeRoom('weapons', 3),
   ];
 
   const resMult = ch.resourceMult || 1;
@@ -36,13 +40,20 @@ function newRun(challengeId) {
     roomsBuilt: 0,
     gameOver: false,
     paused: false,
-    hullTier: 1,
+    hullTier: 2,          // 10 bays to start — combat modules need the room
     condition: 'calm',
     stock: rollSectorStock(1),
     sd: 0,
     atStation: false,
     unlockedBlueprints: new Set(),
+    integrity: CONFIG.combat.integrityBase,   // combat HP; max derives from hullTier
+    combat: null,                             // active fight state, null when not fighting
+    sectorMap: null,                          // branching map of destinations
+    sectorNode: null,                         // id of the node we're parked at
+    sectorStash: {},                          // nodeId -> crew/cargo left behind
   };
+  newSectorMap();                             // root node + its first branches
+  GAME.stock = currentSector().stock;
   clampResources();
   logMsg(`Systems online — ${ch.name}. Keep your crew alive.`, 'good');
   saveGame();
@@ -277,15 +288,6 @@ function rollSector(depth) {
   stock.ice = Math.round(stock.ice * mult);
   return { sector: depth, condition, stock };
 }
-function generateJumpOptions() {
-  const depth = GAME.sector + 1;
-  const opts = [rollSector(depth), rollSector(depth), rollSector(depth)];
-  if (rngFloat() < CONFIG.station.spawnChance) {
-    opts[Math.floor(rngFloat() * 3)] = { type: 'station', sector: depth };
-  }
-  return opts;
-}
-
 function generateStationPrices() {
   const { demandMin, demandMax, resources } = CONFIG.station;
   const prices = {};
@@ -301,32 +303,8 @@ function generateStationPrices() {
   return prices;
 }
 
-// jump to a chosen candidate sector (or station)
-function doJumpTo(opt) {
-  if (!canJump() || !opt) return false;
-  GAME.resources.fuel -= jumpFuelCost();
-  if (opt.type === 'station') {
-    GAME.sector = opt.sector;
-    GAME.stock = { minerals: 0, ice: 0 };
-    GAME.condition = 'calm';
-    GAME.atStation = true;
-    GAME.nextEventIn = Math.min(GAME.nextEventIn, 12);
-    logMsg(`Docked at Space Station — Sector ${opt.sector}. Trade resources for SD.`, 'good');
-    saveGame();
-    return 'station';
-  }
-  GAME.sector = opt.sector;
-  GAME.stock = opt.stock;
-  GAME.condition = opt.condition;
-  GAME.atStation = false;
-  GAME.nextEventIn = Math.min(GAME.nextEventIn, 12);
-  const c = CONDITIONS[opt.condition];
-  if (c.salvageFuel) GAME.resources.fuel = Math.min(cap(GAME, 'fuel'), GAME.resources.fuel + c.salvageFuel);
-  if (c.salvageMinerals) GAME.resources.minerals = Math.min(cap(GAME, 'minerals'), GAME.resources.minerals + c.salvageMinerals);
-  logMsg(`Jumped to Sector ${opt.sector} — ${c.name}. ${c.desc}`, c.tone === 'good' ? 'good' : 'warn');
-  saveGame();
-  return true;
-}
+// Travel now lives in js/sectors.js (travelTo) — it moves through the sector map
+// rather than rolling fresh destinations on every jump.
 
 /* ----------------------------------------------------------
    Station shop: blueprints & crew recruitment

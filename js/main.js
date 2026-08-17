@@ -36,11 +36,12 @@ function loop(now) {
       // snapshot for rate display
       const before = Object.assign({}, GAME.resources);
 
-      // sub-step for stability if dt large
+      // sub-step for stability if dt large. A fight replaces the economy tick
+      // entirely — resources and crew needs hold still until it resolves.
       let remaining = dt;
       while (remaining > 0) {
         const s = Math.min(remaining, CONFIG.tickMs / 1000);
-        step(s);
+        if (GAME.combat) combatStep(s); else step(s);
         remaining -= s;
         if (GAME.gameOver) break;
       }
@@ -56,7 +57,10 @@ function loop(now) {
       // periodic autosave
       saveTimer += dt;
       if (saveTimer >= CONFIG.saveEveryMs / 1000) { saveTimer = 0; saveGame(); }
+    }
 
+    // Render outside the pause gate so a paused fight still draws and stays clickable.
+    if (GAME && !GAME.gameOver) {
       renderAll();
       updateShip(dt);
       drawShip();
@@ -87,8 +91,44 @@ function init() {
   $('#btn-meta').onclick = () => { openChallengeSelect(false); };
 
   $('#crew-list').addEventListener('click', e => {
-    const id = e.target.closest('[data-eject]')?.dataset.eject;
-    if (id) ejectCrew(id);
+    const ejectId = e.target.closest('[data-eject]')?.dataset.eject;
+    if (ejectId) { ejectCrew(ejectId); return; }
+    const unpostId = e.target.closest('[data-unpost]')?.dataset.unpost;
+    if (unpostId) { unassignCrew(unpostId); renderAll(); return; }
+    // clicking the card selects that crew — then click a room to post them
+    const selId = e.target.closest('[data-select]')?.dataset.select;
+    if (selId) selectCrew(selectedCrewId === selId ? null : selId);
+  });
+
+  // skill-chip hint. Cards are rebuilt every frame, so track the hovered chip as
+  // state and let renderSkillTip() redraw it — a title= attribute wouldn't survive.
+  const crewEl = $('#crew-list');
+  crewEl.addEventListener('mouseover', e => {
+    const chip = e.target.closest('.sk[data-skill]');
+    hoveredSkill = chip ? { crewId: chip.dataset.crew, key: chip.dataset.skill } : null;
+  });
+  crewEl.addEventListener('mouseleave', () => { hoveredSkill = null; });
+
+  // combat panel controls (delegated — the panel is rebuilt once per fight)
+  $('#combat-panel').addEventListener('click', e => {
+    if (!GAME.combat) return;
+    const t = e.target.closest('[data-target]');
+    if (t) { setCombatTarget(t.dataset.target); renderAll(); return; }
+    const pip = e.target.closest('[data-pip]');
+    if (pip) { setPips(pip.dataset.pip, +pip.dataset.d); renderAll(); return; }
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'pause') { GAME.paused = !GAME.paused; renderAll(); }
+    else if (act === 'flee') { toggleFlee(); renderAll(); }
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && selectedCrewId) selectCrew(null);
+    // spacebar pauses during a fight, like FTL
+    if (e.code === 'Space' && GAME && GAME.combat && !GAME.gameOver) {
+      e.preventDefault();
+      GAME.paused = !GAME.paused;
+      renderAll();
+    }
   });
 
   // resource flow breakdown on hover
@@ -98,6 +138,12 @@ function init() {
 
   // click backdrop to close modal
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
+
+  // sector-map cards (delegated — the modal body is rebuilt on every open)
+  $('#modal-card').addEventListener('click', e => {
+    const id = e.target.closest('[data-travel]')?.dataset.travel;
+    if (id) confirmTravel(id);
+  });
 
   // save on exit
   window.addEventListener('beforeunload', saveGame);

@@ -22,6 +22,26 @@ function roomPowerDraw(room) {
   if (attrDef(room.type, 'efficiency')) cost *= attrEff(room, 'efficiency');
   return cost * condMod('powerDrawMult', 1);   // hot sectors make everything draw more
 }
+/* ---- combat: `integrity` is ship combat HP (hull/hullTier mean structure, not HP) ---- */
+// Derived from hull tier rather than stored, so expanding the hull raises it automatically.
+function maxIntegrity() {
+  const C = CONFIG.combat;
+  return C.integrityBase + ((GAME && GAME.hullTier || 1) - 1) * C.integrityPerTier;
+}
+// Shield layers the Shield Generator currently provides (0 without one, or while unmanned).
+function shieldLayersMax() {
+  const r = roomsOfType('shields')[0];
+  if (!r) return 0;
+  const d = attrDef('shields', 'layers');
+  return d ? A_BEDS(d.baseN, attrLvl(r, 'layers')) : 0;
+}
+// Chance to dodge incoming fire, from the Engine room's level.
+function evasionChance() {
+  const r = roomsOfType('engine')[0];
+  if (!r) return 0;
+  const C = CONFIG.combat;
+  return Math.min(C.evasionMax, (attrLvl(r, 'fuelefficiency') - 1) * C.evasionPerEngineLvl);
+}
 function totalBeds() { return roomsOfType('quarters').reduce((s, r) => s + bedCount(r), 0); }
 function totalMedBeds() { return roomsOfType('medbay').reduce((s, r) => s + bedCount(r), 0); }
 function seatCount(room) { const d = attrDef(room.type, 'seats'); return d ? A_BEDS(d.baseN, attrLvl(room, 'seats')) : 0; }

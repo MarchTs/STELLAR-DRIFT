@@ -46,6 +46,7 @@ const RES_STORAGE = ['ice', 'ore', 'scrap'];
 
 let lastRates = { power: 0, oxygen: 0, co2: 0, water: 0, ice: 0, minerals: 0, ore: 0, scrap: 0, food: 0, fuel: 0 };
 let hoveredRes = null;
+let hoveredSkill = null;      // { crewId, key } — set on hover, drawn each frame
 let crewPaneTab = 'crew';
 
 /* ---------------- resource flow breakdown (for hover tooltip) ---------------- */
@@ -118,6 +119,37 @@ function renderResTip() {
   tip.classList.remove('hidden');
 }
 
+/* ---------------- skill chip tooltip ----------------
+   Crew cards are rebuilt every frame, so a plain title= attribute dies mid-hover.
+   Same approach as the resource tooltip: remember what's hovered, redraw each frame. */
+function renderSkillTip() {
+  const tip = $('#skill-tip');
+  if (!tip) return;
+  const chip = hoveredSkill && document.querySelector(
+    `#crew-list .sk[data-crew="${hoveredSkill.crewId}"][data-skill="${hoveredSkill.key}"]`);
+  const crew = hoveredSkill && GAME.crew.find(c => c.id === hoveredSkill.crewId);
+  if (!chip || !crew) { tip.classList.add('hidden'); return; }
+
+  const key = hoveredSkill.key, s = SKILLS[key];
+  const lvl = crewSkillLevel(crew, key);
+  const bonus = Math.round((lvl - 1) * CONFIG.skill.outputPerLevel * 100);
+  const sk = crew.skills[key] || { xp: 0 };
+  const need = CONFIG.skill.xpToLevel * lvl;
+  const maxed = lvl >= CONFIG.skill.maxLevel;
+
+  tip.innerHTML = `<div class="rt-title" style="color:${s.color}">${s.name} · Level ${lvl}</div>
+    <div class="st-use">${s.use}</div>
+    <div class="rt-row"><span>Output bonus</span><span class="${bonus > 0 ? 'up' : ''}">${bonus > 0 ? '+' + bonus + '%' : 'none yet'}</span></div>
+    <div class="rt-row"><span>${maxed ? 'Mastered' : 'To next level'}</span><span>${maxed ? 'max' : Math.max(0, Math.ceil(need - sk.xp)) + ' xp'}</span></div>
+    <div class="st-foot">${crew.name} gains this by working a matching module.</div>`;
+
+  const r = chip.getBoundingClientRect();
+  tip.classList.remove('hidden');
+  const w = tip.offsetWidth || 230;
+  tip.style.left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6)) + 'px';
+  tip.style.top = (r.bottom + 6) + 'px';
+}
+
 /* ---------------- top bar ---------------- */
 function resMeter(res) {
   const m = RES_META[res];
@@ -167,9 +199,12 @@ function renderShip() {
   // empty bay on the ship; here we just show a hint line + the hull-expand button.
   const tray = $('#build-tray');
   if (!tray) return;
-  const msg = shipFull()
-    ? `All ${maxRooms()} bays occupied — demolish a module or expand the hull.`
-    : `▦ Click an empty bay on the ship to build a module.`;
+  const sel = selectedCrewId && GAME.crew.find(c => c.id === selectedCrewId);
+  const msg = sel
+    ? `<b style="color:var(--warn)">${sel.name} selected</b> — click a module to post them there, or press Esc to cancel.`
+    : shipFull()
+      ? `All ${maxRooms()} bays occupied — demolish a module or expand the hull.`
+      : `▦ Click or drag a crew to post them, or click an empty bay to build.`;
   const hullLink = hullTier() < CONFIG.hull.maxTier
     ? `<button class="btn small ghost tray-hull" onclick="openHullModal()">⊕ Expand Hull</button>` : '';
   const html = `<div class="tray-msg">${msg}</div>${hullLink}`;
@@ -280,11 +315,17 @@ function renderCrew() {
     // skill chips: highlight the crew's strongest skill
     const top = SKILL_KEYS.reduce((a, k) => crewSkillLevel(c, k) > crewSkillLevel(c, a) ? k : a, SKILL_KEYS[0]);
     const skillChips = SKILL_KEYS.map(k =>
-      `<span class="sk ${k === top ? 'top' : ''}" style="--sk:${SKILLS[k].color}" title="${SKILLS[k].name}">${SKILLS[k].name.slice(0, 3)} ${crewSkillLevel(c, k)}</span>`
+      `<span class="sk ${k === top ? 'top' : ''}" style="--sk:${SKILLS[k].color}"
+        data-skill="${k}" data-crew="${c.id}">${SKILLS[k].name.slice(0, 3)} ${crewSkillLevel(c, k)}</span>`
     ).join('');
-    return `<div class="crew ${dead ? 'dead' : ''}" style="--role:${c.color}">
+    return `<div class="crew ${dead ? 'dead' : ''} ${!dead && c.id === selectedCrewId ? 'selected' : ''}"
+      style="--role:${c.color}" ${dead ? '' : `data-select="${c.id}"`}>
       <div class="crew-top">
-        <div><span class="crew-name">${c.name}</span></div>
+        <div><span class="crew-name">${c.name}</span>${(() => {
+          if (dead || !c.stationId) return '';
+          const sr = GAME.rooms.find(r => r.id === c.stationId);
+          return sr ? `<span class="posted" title="Posted to ${ROOM_DEFS[sr.type].name} — click to release" data-unpost="${c.id}">📌 ${ROOM_DEFS[sr.type].name}</span>` : '';
+        })()}</div>
         ${dead
           ? `<button class="btn small eject-btn" data-eject="${c.id}">⏏ Eject</button>`
           : `<span class="crew-state ${c.state}">${c.state}</span>`}
@@ -311,10 +352,10 @@ function renderLog() {
 /* ---------------- buttons state ---------------- */
 function renderControls() {
   const btnJump = $('#btn-jump');
-  btnJump.disabled = !canJump();
-  btnJump.textContent = `Jump ⟶ (${jumpFuelCost()} fuel)`;
+  btnJump.disabled = !!GAME.combat;                 // no plotting a course mid-fight
+  btnJump.textContent = `🗺 Sector Map (${jumpFuelCost()} fuel)`;
   const low = GAME.stock && (GAME.stock.minerals < 30 || GAME.stock.ice < 30);
-  btnJump.classList.toggle('flash', low && !GAME.atStation);
+  btnJump.classList.toggle('flash', low && !GAME.atStation && canJump());
   const synth = $('#btn-synth');
   if (synth) {
     synth.disabled = !canSynthFuel();
@@ -358,54 +399,114 @@ function renderControls() {
 }
 
 /* ---------------- jump: choose the next sector ---------------- */
-let jumpOptions = null;
 let stationPrices = null;
 
-function openJumpModal() {
-  if (!canJump()) return;
-  jumpOptions = generateJumpOptions();
-  const cost = jumpFuelCost();
-  const cards = jumpOptions.map((o, i) => {
-    if (o.type === 'station') {
-      return `<div class="upg station-card">
-        <div class="u-top"><span class="u-name" style="color:var(--warn)">◉ Space Station</span><span class="u-cat">Sector ${o.sector}</span></div>
-        <div class="u-desc">A neutral trade outpost. Sell surplus resources for SD or restock what you need.</div>
-        <div class="u-blurb">Trades: minerals · ice · water · food · fuel</div>
-        <div class="u-foot"><span class="u-cost" style="color:var(--fuel)">${cost} fuel</span>
-          <button class="btn small primary" onclick="confirmJump(${i})">Dock Here</button></div>
-      </div>`;
-    }
-    const c = CONDITIONS[o.condition];
-    return `<div class="upg ${c.tone === 'risk' ? 'risk-card' : ''}">
-      <div class="u-top"><span class="u-name cond-${c.tone}">${c.icon} ${c.name}</span><span class="u-cat">Sector ${o.sector}</span></div>
-      <div class="u-desc">${c.desc}</div>
-      ${c.reward ? `<div class="reward-line">★ Reward: ${c.reward}</div>` : ''}
-      <div class="u-blurb">Stock: <b style="color:var(--minerals)">${fmt(o.stock.minerals)}</b> ore · <b style="color:var(--ice)">${fmt(o.stock.ice)}</b> ice</div>
-      <div class="u-foot"><span class="u-cost" style="color:var(--fuel)">${cost} fuel</span>
-        <button class="btn small primary" onclick="confirmJump(${i})">Jump here</button></div>
-    </div>`;
-  }).join('');
-  openModal(`<span class="close" onclick="closeModal()">×</span>
-    <h2>Plot a Jump</h2>
-    <p class="muted">Scanners found ${jumpOptions.length} reachable sectors. Each jump costs <b style="color:var(--fuel)">${cost} fuel</b> (you have ${fmt(GAME.resources.fuel)}). Deeper space is more hostile.</p>
-    <div class="upg-grid">${cards}</div>
-    <div class="row-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>`);
+/* ---------------- sector map ----------------
+   Known space drawn as columns by depth: where you've been on the left, the
+   frontier on the right. Travel to anywhere visited, or adjacent to visited. */
+function sectorCardHtml(n) {
+  const here = n.id === GAME.sectorNode;
+  const reachable = canTravelTo(n.id);
+  const d = SECTOR_DIFFICULTY[n.difficulty] || SECTOR_DIFFICULTY[1];
+  const c = sectorCondition(n);
+  const station = n.type === 'station';
+  const stash = hasStash(n.id);
+
+  const cls = ['smap-card'];
+  if (here) cls.push('here');
+  else if (reachable) cls.push('reachable');
+  else cls.push('locked');
+  if (station) cls.push('station');
+
+  const sub = station
+    ? 'Trade outpost'
+    : `${c.icon} ${c.name}`;
+  const stockLine = station
+    ? '<div class="smap-stock">Buys &amp; sells cargo</div>'
+    : `<div class="smap-stock"><b style="color:var(--minerals)">${fmt(n.stock.minerals)}</b> ore · <b style="color:var(--ice)">${fmt(n.stock.ice)}</b> ice</div>`;
+
+  return `<div class="${cls.join(' ')}" ${reachable ? `data-travel="${n.id}"` : ''}>
+    <div class="smap-top">
+      <span class="smap-name">${station ? '◉ ' : ''}${n.name}</span>
+      ${stash ? '<span class="smap-stash" title="Crew or cargo waiting here">📦</span>' : ''}
+    </div>
+    <div class="smap-diff cond-${d.tone}">${station ? '—' : d.stars + ' ' + d.label}</div>
+    <div class="smap-sub">${sub}</div>
+    ${stockLine}
+    <div class="smap-foot">${here ? '<span class="smap-here">You are here</span>'
+      : reachable ? `<span class="smap-go">${n.visited ? 'Return' : 'Travel'} →</span>`
+      : '<span class="smap-lock">Unscanned</span>'}</div>
+  </div>`;
 }
 
-function confirmJump(i) {
-  const opt = jumpOptions && jumpOptions[i];
-  if (!opt) return;
-  const result = doJumpTo(opt);
+function openSectorMapModal() {
+  ensureSectorMap();
+  const known = knownSectors();
+  const byDepth = {};
+  known.forEach(n => { (byDepth[n.depth] = byDepth[n.depth] || []).push(n); });
+  const depths = Object.keys(byDepth).map(Number).sort((a, b) => a - b);
+
+  const cols = depths.map(d => `
+    <div class="smap-col">
+      <div class="smap-colhead">Sector ${d}</div>
+      ${byDepth[d].sort((a, b) => a.id.localeCompare(b.id)).map(sectorCardHtml).join('')}
+    </div>`).join('<div class="smap-link"></div>');
+
+  const cost = jumpFuelCost();
+  const canGo = canJump();
+  const hereStash = hasStash(GAME.sectorNode);
+
+  openModal(`<span class="close" onclick="closeModal()">×</span>
+    <h2>Sector Map</h2>
+    <p class="muted">Each jump costs <b style="color:var(--fuel)">${cost} fuel</b> (you have ${fmt(GAME.resources.fuel)}).
+      Riskier space carries more cargo. You can return to anywhere you've already been.</p>
+    ${canGo ? '' : `<p class="smap-warn">Not enough fuel to jump — synthesise more first.</p>`}
+    ${hereStash ? `<div class="smap-collect">📦 Something is waiting here.
+      <button class="btn small primary" onclick="doCollectStash()">Collect</button></div>` : ''}
+    <div class="smap-scroll"><div class="smap-grid">${cols}</div></div>
+    <div class="row-actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
+}
+
+// kept as the old entry point name so existing wiring keeps working
+function openJumpModal() { openSectorMapModal(); }
+
+function doCollectStash() {
+  if (collectStash()) { renderAll(); openSectorMapModal(); }
+}
+
+let _pendingTravel = null;
+function confirmTravel(id) {
+  const n = sectorNode(id);
+  if (!n || !canTravelTo(id)) return;
+  if (!canJump()) { logMsg('Not enough fuel to jump.', 'bad'); return; }
+  _pendingTravel = id;
+  const d = SECTOR_DIFFICULTY[n.difficulty] || SECTOR_DIFFICULTY[1];
+  const c = sectorCondition(n);
+  openModal(`<h2>${n.type === 'station' ? '◉ ' : ''}${n.name}</h2>
+    <p class="muted">Sector ${n.depth} · ${n.type === 'station' ? 'Trade outpost' : `${d.stars} ${d.label} · ${c.name}`}</p>
+    ${n.type === 'station' ? '<p>Dock to trade cargo for SD, buy blueprints and recruit crew.</p>'
+      : `<p>${c.desc}</p>
+         <p class="muted">Cargo in reach: <b style="color:var(--minerals)">${fmt(n.stock.minerals)}</b> ore ·
+           <b style="color:var(--ice)">${fmt(n.stock.ice)}</b> ice</p>`}
+    <p>Jumping costs <b style="color:var(--fuel)">${jumpFuelCost()} fuel</b>.</p>
+    <div class="row-actions">
+      <button class="btn primary" onclick="doTravel()">${n.type === 'station' ? 'Dock here' : 'Jump here'}</button>
+      <button class="btn" onclick="openSectorMapModal()">Back to map</button>
+    </div>`);
+}
+
+function doTravel() {
+  const id = _pendingTravel;
+  _pendingTravel = null;
+  if (!id) return;
+  const result = travelTo(id);
+  if (!result) return;
+  triggerJumpFlash();
+  closeModal();
+  renderAll();
   if (result === 'station') {
-    triggerJumpFlash();
-    closeModal();
-    renderAll();
     stationPrices = generateStationPrices();
     openStationModal();
-  } else if (result) {
-    triggerJumpFlash();
-    closeModal();
-    renderAll();
   }
 }
 
@@ -663,19 +764,12 @@ function handleEventChoice(logIndex, action) {
     GAME.resources.minerals -= minCost;
     logMsg(`Paid ${minCost} minerals to the pirates. They departed.`, 'bad');
   } else if (action === 'fightPirates') {
-    const damageMultiplier = 1 + (GAME.sector - 2) * 0.3;
-    const crewDamage = Math.floor(15 * damageMultiplier);
-    const fuelLost = Math.floor(8 + GAME.sector * 2);
-    const mineralLost = Math.floor(25 + GAME.sector * 6);
-
-    GAME.resources.fuel = Math.max(0, GAME.resources.fuel - fuelLost);
-    GAME.resources.minerals = Math.max(0, GAME.resources.minerals - mineralLost);
-
-    aliveCrew().forEach(c => {
-      c.needs.health = Math.max(0, c.needs.health - crewDamage);
-    });
-
-    logMsg(`Fought the pirates! Lost ${fuelLost} fuel, ${mineralLost} minerals, and crew took ${crewDamage} damage.`, 'bad');
+    // Refusing now starts a real fight instead of applying flat damage.
+    entry.hasChoices = false; entry.choices = [];
+    _forceCloseModal();
+    startCombat();
+    renderAll(); saveGame();
+    return;
 
   // ---- Distress Signal ----
   } else if (action === 'rescueFull') {
@@ -743,10 +837,162 @@ function renderAll() {
   checkEncounterExpiry();
   renderTop();
   renderShip();
-  if (crewPaneTab === 'crew') renderCrew();
+  // a fight takes over the crew pane
+  if (GAME.combat) renderCombatPanel();
+  else if (crewPaneTab === 'crew') renderCrew();
   else renderStoragePanel();
+  renderCombatPaneMode();
+  renderSkillTip();
   renderLog();
   renderControls();
+}
+
+/* ============================================================
+   Combat panel — takes over the crew pane during a fight.
+
+   Built ONCE per fight, then updated in place. Rebuilding the markup every
+   frame would swap out the buttons between mousedown and mouseup, so clicks
+   would never land.
+   ============================================================ */
+let _combatUiKey = null;
+
+// show/hide the crew pane's normal contents while a fight is on
+function renderCombatPaneMode() {
+  const fighting = !!GAME.combat;
+  const tabs = document.querySelector('.crew-tabs');
+  if (tabs) tabs.style.display = fighting ? 'none' : '';
+  $('#crew-list').classList.toggle('hidden', fighting || crewPaneTab !== 'crew');
+  $('#storage-panel').classList.toggle('hidden', fighting || crewPaneTab !== 'storage');
+  $('#combat-panel').classList.toggle('hidden', !fighting);
+  const count = $('#crew-count');
+  if (count && fighting) count.textContent = 'IN COMBAT';
+  if (!fighting) _combatUiKey = null;
+}
+
+const PIP_SYS = [
+  { key: 'weapons', name: 'Weapons', color: 'var(--bad)' },
+  { key: 'shields', name: 'Shields', color: 'var(--accent)' },
+  { key: 'engines', name: 'Engines', color: 'var(--warn)' },
+];
+
+function combatSkeleton(c) {
+  const sysBtns = c.enemy.systems.map(s =>
+    `<button class="ct-sys" data-target="${s.sys}">
+       <span class="ct-sys-name">${ENEMY_SYS_NAME[s.sys]}</span>
+       <span class="ct-sys-state"></span>
+     </button>`).join('');
+  const pipRows = PIP_SYS.map(p =>
+    `<div class="pip-row">
+       <span class="pip-name" style="color:${p.color}">${p.name}</span>
+       <span class="pip-dots" data-pips="${p.key}"></span>
+       <span class="pip-btns">
+         <button class="btn small pip-btn" data-pip="${p.key}" data-d="-1">−</button>
+         <button class="btn small pip-btn" data-pip="${p.key}" data-d="1">+</button>
+       </span>
+     </div>`).join('');
+  return `
+    <div class="ct-enemy">
+      <div class="ct-head"><span class="ct-name">${c.enemy.name}</span><span class="ct-hp" data-ehp></span></div>
+      <div class="ct-bar"><i data-ebar style="background:var(--bad)"></i></div>
+      <div class="ct-shields" data-eshield></div>
+      <div class="ct-label">Target a system</div>
+      <div class="ct-sysgrid">${sysBtns}</div>
+    </div>
+
+    <div class="ct-us">
+      <div class="ct-head"><span class="ct-name">Your Ship</span><span class="ct-hp" data-ohp></span></div>
+      <div class="ct-bar"><i data-obar style="background:var(--good)"></i></div>
+      <div class="ct-shields" data-oshield></div>
+      <div class="ct-row"><span>Weapon</span><span class="ct-charge" data-charge></span></div>
+      <div class="ct-bar thin"><i data-cbar style="background:var(--warn)"></i></div>
+      <div class="ct-row"><span>Evasion</span><span data-evade></span></div>
+    </div>
+
+    <div class="ct-power">
+      <div class="ct-label">Reactor power <span data-pipfree class="muted"></span></div>
+      ${pipRows}
+    </div>
+
+    <div class="ct-actions">
+      <button class="btn small" data-act="pause"></button>
+      <button class="btn small" data-act="flee"></button>
+    </div>
+    <div class="ct-flee-bar hidden" data-fleewrap><i data-fleebar></i></div>
+    <div class="ct-log" data-ctlog></div>
+  `;
+}
+
+function pipDots(n, max) { return '●'.repeat(n) + '○'.repeat(Math.max(0, max - n)); }
+
+function renderCombatPanel() {
+  const c = GAME.combat;
+  const panel = $('#combat-panel');
+  if (!panel || !c) return;
+  const key = c.enemyType + '|' + c.enemy.systems.map(s => s.sys).join(',');
+  if (_combatUiKey !== key) {
+    panel.innerHTML = combatSkeleton(c);
+    _combatUiKey = key;
+  }
+  const q = (sel) => panel.querySelector(sel);
+  const e = c.enemy;
+
+  // --- enemy ---
+  q('[data-ehp]').textContent = `${Math.ceil(e.integrity)} / ${e.integrityMax}`;
+  q('[data-ebar]').style.width = (e.integrity / e.integrityMax * 100) + '%';
+  q('[data-eshield]').textContent = e.shieldLayersMax
+    ? `Shields ${pipDots(e.shieldLayers, e.shieldLayersMax)}` : 'No shields';
+  panel.querySelectorAll('[data-target]').forEach(btn => {
+    const sys = btn.dataset.target;
+    const obj = e.systems.find(s => s.sys === sys);
+    btn.classList.toggle('targeted', c.targetSys === sys);
+    btn.classList.toggle('down', !!obj?.disabled);
+    btn.querySelector('.ct-sys-state').textContent = obj?.disabled ? 'OFFLINE' : '';
+  });
+
+  // --- us ---
+  const maxI = maxIntegrity();
+  q('[data-ohp]').textContent = `${Math.ceil(GAME.integrity)} / ${maxI}`;
+  q('[data-obar]').style.width = (GAME.integrity / maxI * 100) + '%';
+  const sCap = ourShieldCap();
+  q('[data-oshield]').textContent = sCap
+    ? `Shields ${pipDots(c.shieldLayers, sCap)}`
+    : (roomsOfType('shields')[0] ? 'Shields unpowered' : 'No shield generator');
+
+  // weapon charge — explain plainly when it isn't firing, that's the #1 confusion
+  const wRoom = roomsOfType('weapons')[0];
+  let chargeTxt = 'No weapons bay', frac = 0;
+  if (wRoom) {
+    if (wRoom.disabled) chargeTxt = 'WRECKED';
+    else if (c.pips.weapons < 1) chargeTxt = 'Unpowered — assign a pip';
+    else if (staffOn(wRoom.id) <= 0) chargeTxt = 'Unmanned — send a gunner';
+    else {
+      const need = ourChargeSec(wRoom);
+      frac = Math.min(1, c.weaponTimer / need);
+      chargeTxt = `${(need - c.weaponTimer).toFixed(1)}s · ${ourShotDamage(wRoom).toFixed(1)} dmg`;
+    }
+  }
+  q('[data-charge]').textContent = chargeTxt;
+  q('[data-cbar]').style.width = (frac * 100) + '%';
+  q('[data-evade]').textContent = Math.round(ourEvasion() * 100) + '%';
+
+  // --- power pips ---
+  q('[data-pipfree]').textContent = `${pipsFree()} free of ${c.pipsTotal}`;
+  PIP_SYS.forEach(p => {
+    const capFor = p.key === 'shields' ? Math.max(shieldLayersMax(), c.pips.shields) : c.pipsTotal;
+    panel.querySelector(`[data-pips="${p.key}"]`).textContent = pipDots(c.pips[p.key], Math.min(capFor, c.pipsTotal));
+  });
+
+  // --- actions ---
+  q('[data-act="pause"]').textContent = GAME.paused ? '▶ Resume' : '❚❚ Pause';
+  const fleeBtn = q('[data-act="flee"]');
+  fleeBtn.textContent = c.fleeing ? '✕ Cancel jump' : `⟶ Flee (${CONFIG.combat.fleeFuelCost} fuel)`;
+  fleeBtn.classList.toggle('primary', c.fleeing);
+  q('[data-fleewrap]').classList.toggle('hidden', !c.fleeing);
+  if (c.fleeing) q('[data-fleebar]').style.width = (c.jumpCharge * 100) + '%';
+
+  // --- feed ---
+  q('[data-ctlog]').innerHTML = c.log.slice(0, 8)
+    .map(l => `<div class="ct-line ${l.kind}">${l.text}</div>`).join('');
 }
 
 /* ============================================================
@@ -825,7 +1071,8 @@ function openRoomDetail(roomId, mode) {
     <p class="muted">${def.desc}</p>
     <div class="detail-row"><span>Status</span><span>${staffCountText(room)}</span></div>
     ${CONFIG.rooms[room.type] && CONFIG.rooms[room.type].powerCost
-      ? `<div class="detail-row"><span>Power draw</span><span style="color:var(--power)">${(CONFIG.rooms[room.type].powerCost * primaryMult(room) * (attrDef(room.type,'efficiency') ? attrEff(room,'efficiency') : 1)).toFixed(1)}/s</span></div>` : ''}
+      ? `<div class="detail-row"><span>Power draw${COMBAT_ROOMS.has(room.type) ? ' (in combat)' : ''}</span><span style="color:var(--power)">${(CONFIG.rooms[room.type].powerCost * primaryMult(room) * (attrDef(room.type,'efficiency') ? attrEff(room,'efficiency') : 1)).toFixed(1)}/s</span></div>` : ''}
+    ${stationPickerHtml(room)}
     <div class="attr-grid">${attrRows}</div>
     <div class="row-actions">
       ${confirming
@@ -837,6 +1084,32 @@ function openRoomDetail(roomId, mode) {
     </div>
   `);
 }
+/* ---- manual station orders ---- */
+// Rooms worth stationing someone at: anything that produces, plus the combat rooms.
+function isStationable(type) { return !!ROOM_OUTPUT[type] || COMBAT_ROOMS.has(type); }
+
+function stationPickerHtml(room) {
+  if (!isStationable(room.type)) return '';
+  const sk = ROOM_SKILL[room.type];
+  const chips = aliveCrew().map(c => {
+    const hereNow = c.stationId === room.id;
+    const lvl = sk ? crewSkillLevel(c, sk) : 0;
+    const elsewhere = c.stationId && !hereNow;
+    return `<button class="btn small station-chip ${hereNow ? 'primary' : ''}"
+      title="${hereNow ? 'Release from this post' : 'Station here'}${elsewhere ? ' (currently posted elsewhere)' : ''}"
+      onclick="doStation('${room.id}','${c.id}',${hereNow})">${hereNow ? '● ' : ''}${c.name}${sk ? ` <span class="muted">${lvl}</span>` : ''}</button>`;
+  }).join('');
+  return `<div class="station-pick">
+    <div class="station-head">Station${sk ? ` <span class="muted">· ${SKILLS[sk].name}</span>` : ''}</div>
+    <div class="station-chips">${chips || '<span class="muted">No crew aboard.</span>'}</div>
+    <div class="station-note muted">Posted crew hold this station until they need to eat, sleep or heal.</div>
+  </div>`;
+}
+function doStation(roomId, crewId, release) {
+  if (release) unassignCrew(crewId); else assignCrewTo(crewId, roomId);
+  renderAll(); openRoomDetail(roomId);
+}
+
 function doUpgradeAttr(roomId, key) {
   if (upgradeAttr(roomId, key)) { renderAll(); openRoomDetail(roomId); }
 }

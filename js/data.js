@@ -66,6 +66,10 @@ const CONFIG = {
     storage:    { powerCost: 0 },
     fuelsynthesis: { powerCost: 1.2, fuelOut: 0.8, waterCost: 0.8 },
     manufactor: { powerCost: 1.0, scrapCost: 2.0, oreCost: 1.0, mineralsOut: 1.0 },
+    // Combat rooms. powerCost is drawn by the combat engine via power pips, NOT by the
+    // idle power sim — these sit on standby (free) until a fight starts.
+    weapons:    { powerCost: 2.0, damage: 3.2, chargeSec: 5.0 },
+    shields:    { powerCost: 2.5, layers: 1, rechargeSec: 9.0 },
   },
 
   // level scaling: output & cap multiply by (1 + (level-1)*levelGain)
@@ -84,8 +88,37 @@ const CONFIG = {
     storage: 40,
     fuelsynthesis: 75,
     manufactor: 80,
+    weapons: 90,
+    shields: 85,
     upgradeBase: 30,    // upgrade cost = upgradeBase * level * 1.6
     upgradeMult: 1.6,
+  },
+
+  // ---- Combat (FTL-style ship fights) ----
+  // `integrity` is combat HP. Deliberately NOT called "hull" — hull/hullTier/HULL_COLS
+  // already mean the ship's physical structure and bay count.
+  combat: {
+    integrityBase: 30,        // integrity at hull tier 1
+    integrityPerTier: 10,     // +per additional hull tier
+    evasionPerEngineLvl: 0.06,   // dodge chance added per Engine level
+    evasionMax: 0.6,
+    // ---- power pips ----
+    pipsBase: 3,              // pips at reactor output L1
+    pipsPerReactorLvl: 1,
+    pipsMax: 8,
+    weaponPipSpeedup: 0.15,   // each pip past the first cuts charge time by this fraction
+    evasionPerPip: 0.07,      // each pip in engines adds this much dodge
+    // ---- damage & hazards ----
+    crewDamagePerHit: 14,     // injury to crew standing in a struck room
+    fireChance: 0.18,         // chance a hit starts a fire / breach
+    repairSec: 5.0,           // seconds for a crew member to fix a disabled room
+    enemyRepairSec: 8.0,      // seconds before the enemy restores a disabled system
+    // ---- fleeing ----
+    fleeChargeSec: 14.0,      // how long the FTL jump takes to charge
+    fleeFuelCost: 8,
+    // ---- rewards ----
+    lootPerDifficulty: 30,    // minerals/scrap scale, multiplied by enemy difficulty
+    xpSecondsPerWin: 32,      // a win counts as this many seconds of on-the-job training
   },
 
   // ---- Skills ----
@@ -104,7 +137,8 @@ const CONFIG = {
   },
 
   // ---- Hull expansion: each tier adds a bay column (+2 bays) ----
-  hull: { maxTier: 4, cost: (tier) => 120 + (tier - 1) * 120 },   // cost to expand FROM the given tier
+  // Runs start at tier 2 (10 bays); maxTier 5 keeps the same 3 expansions available.
+  hull: { maxTier: 5, cost: (tier) => 120 + (tier - 1) * 120 },   // cost to expand FROM the given tier
 
   // ---- Manual fuel synthesis (click): very inefficient water -> fuel ----
   synth: { waterPerFuel: 10, fuelPerClick: 1 },
@@ -161,13 +195,21 @@ const CONFIG = {
 // the relevant skill makes them more efficient at it.
 // ------------------------------------------------------------
 const SKILLS = {
-  engineering: { name: 'Engineering', color: '#ffb454' },   // reactor, life support, repairs
-  mining:      { name: 'Mining',      color: '#6fd3c7' },   // mining drone
-  botany:      { name: 'Botany',      color: '#9ad36f' },   // hydroponics
+  engineering: { name: 'Engineering', color: '#ffb454',
+    use: 'Reactor, Life Support, Manufactor, Shield Generator — and patching hazards.' },
+  mining:      { name: 'Mining',      color: '#6fd3c7',
+    use: 'Mining Drone — more ore and ice pulled from the sector.' },
+  botany:      { name: 'Botany',      color: '#9ad36f',
+    use: 'Hydroponics — more food grown per tick.' },
+  gunnery:     { name: 'Gunnery',     color: '#ff6b6b',
+    use: 'Weapons Bay — harder hits in combat. Does nothing outside a fight.' },
 };
-const SKILL_KEYS = ['engineering', 'mining', 'botany'];
+const SKILL_KEYS = ['engineering', 'mining', 'botany', 'gunnery'];
 // which skill a module's work draws on (modules not listed need no skilled operator)
-const ROOM_SKILL = { reactor: 'engineering', lifesupport: 'engineering', extractor: 'mining', hydroponics: 'botany', manufactor: 'engineering' };
+const ROOM_SKILL = { reactor: 'engineering', lifesupport: 'engineering', extractor: 'mining', hydroponics: 'botany', manufactor: 'engineering', weapons: 'gunnery', shields: 'engineering' };
+// Rooms that only do anything during a fight. They draw power and take crew via the combat
+// engine, never via the idle sim — so the economy AI must ignore them outside combat.
+const COMBAT_ROOMS = new Set(['weapons', 'shields']);
 
 // ------------------------------------------------------------
 // Room definitions (display + behavior flags)
@@ -184,6 +226,8 @@ const ROOM_DEFS = {
   storage:     { name: 'Storage Room', icon: '📦', staffRole: null,      auto: true,  desc: 'Extra cargo bay. Increases all resource storage capacity.' },
   fuelsynthesis: { name: 'Fuel Synthesis', icon: '⚗', staffRole: null,  auto: true,  desc: 'Automated refinery. Converts water into fuel continuously. Needs power.' },
   manufactor:  { name: 'Manufactor',  icon: '⚙', staffRole: null,       auto: false, desc: 'An operator processes scrap and ore into refined minerals. Engineering skill improves yield. Needs power.' },
+  weapons:     { name: 'Weapons Bay', icon: '✷', staffRole: null,       auto: false, desc: 'A gunner fires on enemy ships in combat. Gunnery skill improves damage and charge speed. Idle outside a fight.' },
+  shields:     { name: 'Shield Generator', icon: '◈', staffRole: null,  auto: false, desc: 'An operator raises shield layers that absorb enemy fire in combat. Engineering skill speeds recharge. Idle outside a fight.' },
 };
 
 // random crew names
@@ -290,7 +334,49 @@ const ROOM_ATTRS = {
     { key: 'mineralstorage', name: 'Mineral Storage',  kind: 'mult', base: 20, max: 8,
       hint: (l) => `+${(l - 1) * 50} mineral cap (+50 per level)` },
   ],
+  weapons: [
+    { key: 'damage',     name: 'Weapon Damage', kind: 'mult', base: 32, max: 10,
+      hint: (l) => `${_f(CONFIG.rooms.weapons.damage * A_MULT(l))} damage per shot` },
+    { key: 'chargerate', name: 'Charge Rate',   kind: 'eff',  base: 28, max: 6,
+      hint: (l) => `${_f(CONFIG.rooms.weapons.chargeSec * A_EFF(l))}s between shots` },
+  ],
+  shields: [
+    { key: 'layers',   name: 'Shield Layers',  kind: 'beds', base: 36, max: 4, baseN: 1,
+      hint: (l) => `${A_BEDS(1, l)} shield layer${A_BEDS(1, l) > 1 ? 's' : ''}` },
+    { key: 'recharge', name: 'Recharge Rate',  kind: 'eff',  base: 28, max: 6,
+      hint: (l) => `${_f(CONFIG.rooms.shields.rechargeSec * A_EFF(l))}s per layer` },
+  ],
 };
+
+// ------------------------------------------------------------
+// Enemy ships. Stats are the baseline at sector 1 and scale with sector depth
+// (see scaleEnemy() in js/combat.js). `systems` are the targetable rooms.
+// ------------------------------------------------------------
+const ENEMY_SHIP_DEFS = {
+  scout: {
+    name: 'Pirate Scout', difficulty: 1, minSector: 1,
+    integrity: 12, shieldLayers: 0, rechargeSec: 10,
+    damage: 2.0, chargeSec: 5.5, evasion: 0.25,
+    systems: ['weapons', 'engines'],
+    desc: 'Fast and lightly armed. Hard to hit, but it folds quickly.',
+  },
+  fighter: {
+    name: 'Pirate Fighter', difficulty: 2, minSector: 2,
+    integrity: 20, shieldLayers: 1, rechargeSec: 11,
+    damage: 3.0, chargeSec: 6.0, evasion: 0.15,
+    systems: ['weapons', 'shields', 'engines'],
+    desc: 'A balanced raider — shielded, and it hits back properly.',
+  },
+  gunship: {
+    name: 'Pirate Gunship', difficulty: 3, minSector: 4,
+    integrity: 30, shieldLayers: 2, rechargeSec: 10,
+    damage: 4.0, chargeSec: 6.5, evasion: 0.05,
+    systems: ['weapons', 'shields', 'engines'],
+    desc: 'Slow, heavily shielded, and carries a gun that hurts.',
+  },
+};
+// display names for enemy systems (also used for our own rooms in combat log lines)
+const ENEMY_SYS_NAME = { weapons: 'Weapons', shields: 'Shields', engines: 'Engines' };
 
 // ------------------------------------------------------------
 // Event definitions
